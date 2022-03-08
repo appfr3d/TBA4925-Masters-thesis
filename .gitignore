@@ -1,0 +1,12 @@
+# Do not publish any data
+data/
+*/data/
+rapport/
+*/results/
+
+# Venv
+master/
+
+# Misc
+.DS_Store
+*/.DS_Store
