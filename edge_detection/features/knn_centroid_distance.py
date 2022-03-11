@@ -36,25 +36,43 @@ class kNNCentroidDistance(Feature):
     
 
 if __name__ == "__main__":
-  from helpers import read_roof_cloud, write_roof_cloud_result
+  import os
+  from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image
   
-  file_name = "32-1-510-215-53-roof-2-shift.ply"
+  file_name_base = "32-1-510-215-53-test-1"
+  file_name = file_name_base + ".ply"
   cloud = read_roof_cloud(file_name)
 
   f = kNNCentroidDistance(cloud)
 
   values = f.run()
 
-  colors = np.zeros((values.shape[0], 3))
-  # colors += [0.6, 0.6, 0.6]
-  colors[values<=0] = [0.6, 0.6, 0.6]
-  colors[values>0] = [0, 1, 0] # Color points with high mean distance to knn centroid as green
+  project_folder = get_project_folder()
+  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/knn_centroid_distance/images/' + file_name_base + '/')
+  
+  # Create folder if not exists
+  if not os.path.exists(image_folder):
+    os.makedirs(image_folder)
 
-  cloud.colors = o3d.utility.Vector3dVector(colors[:, :3])
+  # Create window
+  vis = o3d.visualization.Visualizer()
+  vis.create_window(width=1000, height=1000)
+  vis.add_geometry(cloud)
 
-  o3d.visualization.draw_geometries([cloud])
+  save_scaled_feature_image(vis, cloud, values, image_folder, "Global")
 
+  # colors = np.zeros((values.shape[0], 3))
+  # # colors += [0.6, 0.6, 0.6]
+  # colors[values<=0] = [0.6, 0.6, 0.6]
+  # colors[values>0] = [0, 1, 0] # Color points with high mean distance to knn centroid as green
+
+  # cloud.colors = o3d.utility.Vector3dVector(colors[:, :3])
+
+  # o3d.visualization.draw_geometries([cloud])
+
+  '''
   file_out_name = "32-1-510-215-53-knn_centroid_distance-shift.ply"
   write_roof_cloud_result(file_out_name, cloud)
+  '''
 
 

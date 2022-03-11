@@ -2,21 +2,37 @@ import numpy as np
 import os
 import open3d as o3d
 
-def read_roof_cloud(file_name):
+def get_project_folder():
   current_folder = os.path.dirname(os.path.abspath(__file__))
-  project_folder = os.path.dirname(os.path.dirname(current_folder))
+  return os.path.dirname(os.path.dirname(current_folder))
+
+def read_roof_cloud(file_name):
+  project_folder = get_project_folder()
   data_folder = os.path.join(project_folder, "data/point_clouds")
   roof_path = os.path.join(data_folder, "roofs", file_name)
 
   cloud = o3d.io.read_point_cloud(roof_path)
-
   return cloud
 
 def write_roof_cloud_result(file_name, cloud):
-  current_folder = os.path.dirname(os.path.abspath(__file__))
-  project_folder = os.path.dirname(os.path.dirname(current_folder))
+  project_folder = get_project_folder()
   results_folder = os.path.join(project_folder, "data/point_clouds/edge_results")
   return o3d.io.write_point_cloud(os.path.join(results_folder, file_name), cloud, print_progress=True)
+
+def save_scaled_feature_image(vis, cloud, labels, image_folder, scale_name):
+  colors = np.zeros((labels.shape[0], 3))
+  colors += [0.6, 0.6, 0.6]
+  
+  colors[labels >= 0] = [0, 1, 0] # Color positive values as green
+
+  cloud.colors = o3d.utility.Vector3dVector(colors[:, :3])
+  vis.update_geometry(cloud)
+  vis.update_renderer()
+  vis.poll_events()
+
+  img_path = os.path.join(image_folder, 'Scale' + scale_name + '.png')
+  vis.capture_screen_image(img_path)
+
 
 def dist(p1, p2):
   return np.sqrt(np.abs(p1[0] - p2[0])**2 + np.abs(p1[1] - p2[1])**2 + np.abs(p1[2] - p2[2])**2)
