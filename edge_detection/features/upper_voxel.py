@@ -19,10 +19,16 @@ class UpperVoxel(VoxelFeature):
     # labels = np.zeros(voxels.shape[0])
 
     # max_z = np.max([v.grid_index[2] for v in all_voxels])
+    grid_index_to_point_indices = {}
+    for point_i in range(self.points.shape[0]):
+      grid_index = tuple(self.voxel_grid.get_voxel(self.points[point_i]))
+      if not grid_index in grid_index_to_point_indices.keys():
+        grid_index_to_point_indices[grid_index] = [point_i]
+      else:
+        grid_index_to_point_indices[grid_index].append(point_i)
 
     # Visualize voxels at different scales
     # o3d.visualization.draw([self.voxel_grid])
-
     for voxel_i in range(voxels.shape[0]):
       # if voxels[voxel_i].grid_index[2] == max_z:
       # Check if there are neighboring voxels straight or diagonally above.
@@ -30,13 +36,14 @@ class UpperVoxel(VoxelFeature):
       center = self.voxel_grid.get_voxel_center_coordinate(grid_index)
 
       # All neighbors above current voxel
-      above_neighbors = np.zeros((9, 3))
+      above_neighbors = np.zeros((3*3*2, 3))
       n = 0
       for x in [-1,0,1]:
         for y in [-1,0,1]:
-            point = np.array([center[0]+scale*x, center[1]+scale*y, center[2]+scale])
-            above_neighbors[n] = point
-            n += 1
+           for s in range(1, 3):
+              point = np.array([center[0]+scale*x*s, center[1]+scale*y*s, center[2]+scale])
+              above_neighbors[n] = point
+              n += 1
 
       around_neighbors = np.zeros((8, 3))
       n = 0
@@ -62,26 +69,10 @@ class UpperVoxel(VoxelFeature):
       around_included = self.voxel_grid.check_if_included(around_query)
 
       # If they are a upper_voxel, store it in the labels
-      if np.sum(above_included) == 0 and np.sum(around_included) <= 3:
-        # Find points in circle around the voxel
-        radius = scale * np.sqrt(2) * 0.5
-        [_, idx, _] = self.kd_tree.search_radius_vector_3d(center, radius)
-
-        # Exclude the points not in the square ([]) <-
-        bound = np.asarray(self.voxel_grid.get_voxel_bounding_points(grid_index))
-        bound_x = [np.max(bound[:, 0]), np.min(bound[:, 0])]
-        bound_y = [np.max(bound[:, 1]), np.min(bound[:, 1])]
-        bound_z = [np.max(bound[:, 2]), np.min(bound[:, 2])]
-        true_idx = []
-        for point_i in idx:
-          if  bound_x[0] >= self.points[point_i][0] >= bound_x[1] and \
-              bound_y[0] >= self.points[point_i][1] >= bound_y[1] and \
-              bound_z[0] >= self.points[point_i][2] >= bound_z[1]:
-            true_idx.append(point_i)
-
-        if len(true_idx) == 0:
-          print('true_idx len == 0... wtf, idx len =', len(idx))   
-        labels[true_idx] = 1
+      # if np.sum(above_included) == 0: #  and 
+      if np.sum(around_included) <= 3:
+        point_indices = grid_index_to_point_indices[tuple(grid_index)]
+        labels[point_indices] = 1
 
     # Visualize colored voxels
     pcd = o3d.geometry.PointCloud()

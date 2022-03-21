@@ -97,7 +97,7 @@ class VoxelFeature():
 
     step = (max_scale-min_scale)/NUM_SCALES
     scales = [min_scale + step*i for i in range(NUM_SCALES)]
-    
+
     # Preprocess if needed
     self.preprocess_whole_cloud()
 
