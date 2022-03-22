@@ -8,6 +8,7 @@ class Feature():
     self.cloud = copy.deepcopy(cloud)
 
 NUM_SCALES = 8
+VISUALIZE_VOXELS = True
 
 class ScalableFeature(Feature):
   def run(self):
@@ -104,8 +105,20 @@ class VoxelFeature():
     labels = np.zeros((NUM_SCALES, self.points.shape[0]))
     for scale_i in range(len(scales)):
       print('Calculating scale', scale_i, 'with size:', scales[scale_i])
+      # Generate voxels
       self.voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(self.cloud, voxel_size=scales[scale_i])
-      scale_labels = self.run_at_sacale(scales[scale_i])
+
+      # Hash which points are in each grid index
+      self.grid_index_to_point_indices = {}
+      for point_i in range(self.points.shape[0]):
+        grid_index = tuple(self.voxel_grid.get_voxel(self.points[point_i]))
+        if not grid_index in self.grid_index_to_point_indices.keys():
+          self.grid_index_to_point_indices[grid_index] = [point_i]
+        else:
+          self.grid_index_to_point_indices[grid_index].append(point_i)
+
+      # Run feature
+      scale_labels = self.run_at_sacale(scales[scale_i], visualize=VISUALIZE_VOXELS)
       labels[scale_i] = scale_labels
     
     return labels
@@ -113,7 +126,7 @@ class VoxelFeature():
   def preprocess_whole_cloud(self):
     pass
 
-  def run_at_sacale(self, scale=float):
+  def run_at_sacale(self, scale=float, visualize=True):
     pass
     
 

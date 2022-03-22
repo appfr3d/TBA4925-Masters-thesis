@@ -15,25 +15,25 @@ class UpperVoxel(VoxelFeature):
   def run_at_sacale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
-    labels = np.ones(self.points.shape[0])*-1 # Default to not a upper_voxel
+    labels = np.ones(self.points.shape[0])*-1 # Default to not a around_voxel
 
+    # Evaluate each voxel
     for voxel_i in range(voxels.shape[0]):
-      # Check if there are neighboring voxels straight or diagonally above.
       grid_index = voxels[voxel_i].grid_index
       center = self.voxel_grid.get_voxel_center_coordinate(grid_index)
 
-      # All neighbors above current voxel
-      above_neighbors = np.zeros((3*3*2*2, 3))
+      # All voxels surrounding current voxel
+      around_neighbors = np.zeros((3*3*2 - 1, 3))
       n = 0
       for x in [-1,0,1]:
         for y in [-1,0,1]:
-          for h in range(1, 3):
-            for s in range(1, 3):
-              point = np.array([center[0]+scale*x*s, center[1]+scale*y*s, center[2]+scale*h])
-              above_neighbors[n] = point
+          for s in range(1,3):
+            if not (x == 0 and y == 0):
+              point = np.array([center[0]+scale*x*s, center[1]+scale*y*s, center[2]])
+              around_neighbors[n] = point
               n += 1
-
-      above_query = o3d.utility.Vector3dVector(above_neighbors)
+      
+      around_query = o3d.utility.Vector3dVector(around_neighbors)
 
       # Visualize above_query
       # pcd = o3d.geometry.PointCloud()
@@ -41,10 +41,10 @@ class UpperVoxel(VoxelFeature):
       # pcd.paint_uniform_color([1,0,0])
       # o3d.visualization.draw([self.voxel_grid, pcd])
 
-      above_included = self.voxel_grid.check_if_included(above_query)
+      around_included = self.voxel_grid.check_if_included(around_query)
 
       # If they are a upper_voxel, store it in the labels
-      if np.sum(above_included) == 0:
+      if np.sum(around_included) <= 3:
         point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
         labels[point_indices] = 1
 
@@ -55,7 +55,7 @@ class UpperVoxel(VoxelFeature):
       colors = np.asarray(self.cloud.colors)
       colors[labels >= 0] = [0, 1, 0] # Color positive values as green
       pcd.colors = o3d.utility.Vector3dVector(colors)
-
+      
       colored_voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=scale)
       o3d.visualization.draw([colored_voxels])
 
@@ -65,18 +65,16 @@ class UpperVoxel(VoxelFeature):
 if __name__ == "__main__":
   import os
   from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image
-  file_name_base = "32-1-510-215-53-test-3"
+  file_name_base = "32-1-510-215-53-test-2"
   file_name = file_name_base + ".ply"
   cloud = read_roof_cloud(file_name)
 
   # o3d.visualization.draw_geometries([cloud])
 
-  print(cloud)
-
   f = UpperVoxel(cloud)
 
   project_folder = get_project_folder()
-  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/upper_voxel/images/' + file_name_base + '/')
+  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/around_voxel/images/' + file_name_base + '/')
   
   # Create folder if not exists
   if not os.path.exists(image_folder):
