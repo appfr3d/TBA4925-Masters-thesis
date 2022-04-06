@@ -14,6 +14,16 @@ def read_roof_cloud(file_name):
   cloud = o3d.io.read_point_cloud(roof_path)
   return cloud
 
+def normalize_cloud(cloud):
+  points = np.asarray(cloud.points)
+  center = cloud.get_center()
+  points -= center
+  all_dist = np.array([dist([0,0,0], x) for x in points])
+  points /= np.max(all_dist)
+
+  cloud.points = o3d.utility.Vector3dVector(points)
+  return cloud
+
 def write_roof_cloud_result(file_name, cloud):
   project_folder = get_project_folder()
   results_folder = os.path.join(project_folder, "data/point_clouds/edge_results")
