@@ -21,7 +21,13 @@ class NormalCluster(ScalableFeature):
     c = o3d.geometry.PointCloud()
     c.points = self.cloud.normals
     c.normals = self.cloud.normals
-    o3d.visualization.draw_geometries([c])
+
+    center = o3d.geometry.PointCloud()
+    s = np.asarray(self.cloud.points).shape
+    center.points = o3d.utility.Vector3dVector(np.zeros(s))
+    center.normals = self.cloud.normals
+    center.colors = o3d.utility.Vector3dVector(np.zeros(s) + [1, 0, 0])
+    o3d.visualization.draw_geometries([c, center])
 
     labels = np.array(c.cluster_dbscan(eps=0.1, min_points=100))
     colors = np.zeros((labels.shape[0], 3))
@@ -34,7 +40,7 @@ class NormalCluster(ScalableFeature):
     # Create KDTree
     self.kd_tree = o3d.geometry.KDTreeFlann(self.cloud)
 
-  def run_at_sacale(self, scale=float):
+  def run_at_scale(self, scale=float):
     points = np.asarray(self.cloud.points)
     normals = np.asarray(self.cloud.normals)
     labels = np.zeros(points.shape[0])

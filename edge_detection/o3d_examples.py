@@ -10,11 +10,15 @@ import sys
 
 # Read data
 def read():
-  pcd = o3d.io.read_point_cloud("data/T-Element - Cloud.ply")
-  print(pcd)
-  print(pcd.colors)
-  print(np.asarray(pcd.colors))
+  pcd = o3d.io.read_point_cloud("../data/point_clouds/classified_roofs/32-1-510-215-53-test-1.ply")
+  # print(pcd)
+  # print(pcd.colors)
+  # print(np.asarray(pcd.colors))
   return pcd
+
+def write(cloud):
+  return o3d.io.write_point_cloud("../data/point_clouds/classified_roofs/with_normal/32-1-510-215-53-test-1.ply", cloud, print_progress=True)
+  pass
 
 # Create Open3d point cloud from numpy array
 def create(array):
@@ -61,9 +65,8 @@ if __name__ == "__main__":
   # down = voxel_down(cloud)
 
   norm = vertex_normal_estimation(cloud) # .normalize_normals()
+  visualize(norm)
+  write(norm)
 
-  visualize(cloud)
-
-  cloud.points = norm.normals
-
-  visualize(cloud)
+  # cloud.points = norm.normals
+  # visualize(cloud)

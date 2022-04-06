@@ -8,6 +8,8 @@ from helpers import dist, mean_dist
 #       OBS: must normalize point clouds before saving them to use this feature!
 #####
 
+# TODO: change this to a scaled feature
+
 class kNNCentroidDistance(Feature):
   def run(self):
 

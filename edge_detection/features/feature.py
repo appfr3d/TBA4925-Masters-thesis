@@ -6,9 +6,13 @@ from helpers import dist, mean_dist
 class Feature():
   def __init__(self, cloud: o3d.geometry.PointCloud) -> None:
     self.cloud = copy.deepcopy(cloud)
+    self.preprocess_whole_cloud()
+
+  def preprocess_whole_cloud(self):
+    pass
 
 NUM_SCALES = 8
-VISUALIZE_VOXELS = True
+VISUALIZE_VOXELS = False
 
 class ScalableFeature(Feature):
   def run(self):
@@ -47,7 +51,7 @@ class ScalableFeature(Feature):
     labels = np.zeros((NUM_SCALES, points.shape[0]))
     for scale_i in range(len(scales)):
       print('Calculating scale', scale_i)
-      scale_labels = self.run_at_sacale(scales[scale_i])
+      scale_labels = self.run_at_scale(scales[scale_i])
       labels[scale_i] = scale_labels
     
     return labels
@@ -55,7 +59,7 @@ class ScalableFeature(Feature):
   def preprocess_whole_cloud(self):
     pass
 
-  def run_at_sacale(self, scale=float):
+  def run_at_scale(self, scale=float):
     pass
 
 class GlobalFeature(Feature):
@@ -118,7 +122,7 @@ class VoxelFeature():
           self.grid_index_to_point_indices[grid_index].append(point_i)
 
       # Run feature
-      scale_labels = self.run_at_sacale(scales[scale_i], visualize=VISUALIZE_VOXELS)
+      scale_labels = self.run_at_scale(scales[scale_i], visualize=VISUALIZE_VOXELS)
       labels[scale_i] = scale_labels
     
     return labels
@@ -126,9 +130,56 @@ class VoxelFeature():
   def preprocess_whole_cloud(self):
     pass
 
-  def run_at_sacale(self, scale=float, visualize=True):
+  def run_at_scale(self, scale=float, visualize=True):
     pass
     
+
+class SmallVoxelFeature():
+  def __init__(self, cloud: o3d.geometry.PointCloud) -> None:
+    self.cloud = copy.deepcopy(cloud)
+  
+  def run(self):
+    self.kd_tree = o3d.geometry.KDTreeFlann(self.cloud)
+
+    self.points = np.asarray(self.cloud.points)
+    mean_distances = np.zeros(self.points.shape[0])
+    for point_i, point in enumerate(self.points):
+      [_, idx, _] = self.kd_tree.search_knn_vector_3d(point, 11) # 10 nearest neighbors, and itself
+      mean_distances[point_i] = mean_dist(point, self.points[idx[1:]])
+    
+    min_scale = np.mean(mean_distances)
+    scales = [min_scale]
+
+    # Preprocess if needed
+    self.preprocess_whole_cloud()
+
+    labels = np.zeros((len(scales), self.points.shape[0]))
+    for scale_i in range(len(scales)):
+      print('Calculating scale', scale_i, 'with size:', scales[scale_i])
+      # Generate voxels
+      self.voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(self.cloud, voxel_size=scales[scale_i])
+
+      # Hash which points are in each grid index
+      self.grid_index_to_point_indices = {}
+      for point_i in range(self.points.shape[0]):
+        grid_index = tuple(self.voxel_grid.get_voxel(self.points[point_i]))
+        if not grid_index in self.grid_index_to_point_indices.keys():
+          self.grid_index_to_point_indices[grid_index] = [point_i]
+        else:
+          self.grid_index_to_point_indices[grid_index].append(point_i)
+
+      # Run feature
+      scale_labels = self.run_at_scale(scales[scale_i], visualize=VISUALIZE_VOXELS)
+      labels[scale_i] = scale_labels
+    
+    return labels
+
+  def preprocess_whole_cloud(self):
+    pass
+
+  def run_at_scale(self, scale=float, visualize=True):
+    pass
+
 
 if __name__ == "__main__":
   from helpers import read_roof_cloud

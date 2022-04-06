@@ -9,42 +9,42 @@ from feature import VoxelFeature
 #       Then I need to calculate many different neighborhood matrises and average over the segmented values
 
 # Edge if:
-# * No voxels above in neighborhood 
+# * No voxels below in neighborhood 
 # * Max 3 voxels in same z neighborhood
-class UpperVoxel(VoxelFeature):
+class LowerVoxel(VoxelFeature):
   def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
     labels = np.ones(self.points.shape[0])*-1 # Default to not a upper_voxel
 
     for voxel_i in range(voxels.shape[0]):
-      # Check if there are neighboring voxels straight or diagonally above.
+      # Check if there are neighboring voxels straight or diagonally below.
       grid_index = voxels[voxel_i].grid_index
       center = self.voxel_grid.get_voxel_center_coordinate(grid_index)
 
-      # All neighbors above current voxel
-      above_neighbors = np.zeros((3*3*2*2, 3))
+      # All neighbors below current voxel
+      below_neighbors = np.zeros((3*3*2*2, 3))
       n = 0
       for x in [-1,0,1]:
         for y in [-1,0,1]:
           for h in range(1, 3):
             for s in range(1, 3):
-              point = np.array([center[0]+scale*x*s, center[1]+scale*y*s, center[2]+scale*h])
-              above_neighbors[n] = point
+              point = np.array([center[0]+scale*x*s, center[1]+scale*y*s, center[2]-scale*h])
+              below_neighbors[n] = point
               n += 1
 
-      above_query = o3d.utility.Vector3dVector(above_neighbors)
+      below_query = o3d.utility.Vector3dVector(below_neighbors)
 
-      # Visualize above_query
+      # Visualize below_query
       # pcd = o3d.geometry.PointCloud()
-      # pcd.points = o3d.utility.Vector3dVector(above_query)
+      # pcd.points = o3d.utility.Vector3dVector(below_query)
       # pcd.paint_uniform_color([1,0,0])
       # o3d.visualization.draw([self.voxel_grid, pcd])
 
-      above_included = self.voxel_grid.check_if_included(above_query)
+      below_included = self.voxel_grid.check_if_included(below_query)
 
       # If they are a upper_voxel, store it in the labels
-      if np.sum(above_included) == 0:
+      if np.sum(below_included) == 0:
         point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
         labels[point_indices] = 1
 
@@ -65,18 +65,21 @@ class UpperVoxel(VoxelFeature):
 if __name__ == "__main__":
   import os
   from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image
-  file_name_base = "32-1-510-215-53-test-3"
+  file_name_base = "32-1-510-215-53-test-1"
   file_name = file_name_base + ".ply"
+
+  # print("Processing", file_name)
+
   cloud = read_roof_cloud(file_name)
 
   # o3d.visualization.draw_geometries([cloud])
 
   print(cloud)
 
-  f = UpperVoxel(cloud)
+  f = LowerVoxel(cloud)
 
   project_folder = get_project_folder()
-  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/upper_voxel/images/' + file_name_base + '/')
+  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/lower_voxel/images/' + file_name_base + '/')
   
   # Create folder if not exists
   if not os.path.exists(image_folder):

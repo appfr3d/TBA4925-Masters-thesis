@@ -11,8 +11,12 @@ from feature import VoxelFeature
 # Edge if:
 # * No voxels above in neighborhood 
 # * Max 3 voxels in same z neighborhood
+
+
+outer_sides = [[0,1,2,3,4], [4,9,13,18,23], [19,20,21,22,23], [0,5,10,14,29]]
+inner_sides = [[6,7,8], [8,12,17], [15,16,17], [6,11,15]]
 class UpperVoxel(VoxelFeature):
-  def run_at_sacale(self, scale=float, visualize=True):
+  def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
     labels = np.ones(self.points.shape[0])*-1 # Default to not a around_voxel
@@ -23,16 +27,16 @@ class UpperVoxel(VoxelFeature):
       center = self.voxel_grid.get_voxel_center_coordinate(grid_index)
 
       # All voxels surrounding current voxel
-      around_neighbors = np.zeros((3*3*2 - 1, 3))
+      around_neighbors = np.zeros((5*5 - 1, 3))
       n = 0
-      for x in [-1,0,1]:
-        for y in [-1,0,1]:
-          for s in range(1,3):
-            if not (x == 0 and y == 0):
-              point = np.array([center[0]+scale*x*s, center[1]+scale*y*s, center[2]])
-              around_neighbors[n] = point
-              n += 1
+      for x in [-2,-1,0,1,2]:
+        for y in [-2,-1,0,1,2]:
+          if not (x == 0 and y == 0):
+            point = np.array([center[0]+scale*x, center[1]+scale*y, center[2]])
+            around_neighbors[n] = point
+            n += 1
       
+
       around_query = o3d.utility.Vector3dVector(around_neighbors)
 
       # Visualize above_query
@@ -42,6 +46,8 @@ class UpperVoxel(VoxelFeature):
       # o3d.visualization.draw([self.voxel_grid, pcd])
 
       around_included = self.voxel_grid.check_if_included(around_query)
+
+
 
       # If they are a upper_voxel, store it in the labels
       if np.sum(around_included) <= 3:
