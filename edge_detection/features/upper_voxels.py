@@ -11,7 +11,7 @@ from feature import VoxelFeature
 # Edge if:
 # * No voxels above in neighborhood 
 # * Max 3 voxels in same z neighborhood
-class UpperVoxel(VoxelFeature):
+class UpperVoxels(VoxelFeature):
   def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
   print(cloud)
 
-  f = UpperVoxel(cloud)
+  f = UpperVoxels(cloud)
 
   project_folder = get_project_folder()
   image_folder = os.path.join(project_folder, 'edge_detection/results/feature/upper_voxel/images/' + file_name_base + '/')

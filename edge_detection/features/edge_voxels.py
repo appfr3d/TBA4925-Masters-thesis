@@ -2,21 +2,21 @@ import numpy as np
 import open3d as o3d
 from scipy.ndimage import gaussian_filter
 from matplotlib import pyplot as plt
-from feature import SmallVoxelFeature
+from feature import SmallVoxelFeature, SmallScalableFeatureState
 
 H = 2
 K = 2*H + 1
 
-class LowerVoxel(SmallVoxelFeature):
+class EdgeVoxels(SmallVoxelFeature):
   def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
-    labels = np.ones(self.points.shape[0])*-1 # Default to not a upper_voxel
+    labels = np.ones(self.state.points.shape[0])*-1 # Default to not a upper_voxel
 
     # Smallest, middle and largest eigen value lists
-    smallest = np.zeros(self.points.shape[0])
-    middle = np.zeros(self.points.shape[0])
-    largest = np.zeros(self.points.shape[0])
+    smallest = np.zeros(self.state.points.shape[0])
+    middle = np.zeros(self.state.points.shape[0])
+    largest = np.zeros(self.state.points.shape[0])
 
     # Make a new voxel list with all the occupied voxels
     # Make a new empty dict called full
@@ -40,17 +40,6 @@ class LowerVoxel(SmallVoxelFeature):
       grid_index = tuple(voxels[voxel_i].grid_index)
       # Add occupied voxels
       occupancy_grid[grid_index] = 1.0
-
-    # for voxel_i in range(voxels.shape[0]):
-    #   grid_index = tuple(voxels[voxel_i].grid_index)
-    #   for x in range(-H, H+1):
-    #     for y in range(-H, H+1):
-    #       for z in range(-H, H+1):
-    #         neighbor_grid_index = (grid_index[0] + x, grid_index[1] + y, grid_index[2] + z)
-    #         if not neighbor_grid_index in voxels_with_neighbors.keys():
-    #           # Add unoccupied neighboring voxels
-    #           voxels_with_neighbors[neighbor_grid_index] = 0.0
-
 
     # Presmooth occupancy_grid
     occupancy_grid = gaussian_filter(occupancy_grid, sigma=1)
@@ -79,7 +68,6 @@ class LowerVoxel(SmallVoxelFeature):
               exponent = np.exp(-(x_part + y_part + z_part))
               voxels_with_neighbors[neighbor_grid_index] = exponent * occupancy_grid[neighbor_grid_index]
 
-    # 
     for voxel_i in range(voxels.shape[0]):
       grid_index = tuple(voxels[voxel_i].grid_index)
 
@@ -134,8 +122,8 @@ class LowerVoxel(SmallVoxelFeature):
     # Visualize colored voxels
     if visualize:
       pcd = o3d.geometry.PointCloud()
-      pcd.points = o3d.utility.Vector3dVector(self.points)
-      colors = np.asarray(self.cloud.colors)
+      pcd.points = o3d.utility.Vector3dVector(self.state.points)
+      colors = np.asarray(self.state.cloud.colors)
       colors[labels >= 0] = [0, 1, 0] # Color positive values as green
       pcd.colors = o3d.utility.Vector3dVector(colors)
 
@@ -160,54 +148,16 @@ class LowerVoxel(SmallVoxelFeature):
       
       plt.show()
 
-
     return labels 
 
 
 if __name__ == "__main__":
-  import os
-  from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image, normalize_cloud
-  file_name_base = "32-1-510-215-53-test-1"
-  file_name = file_name_base + ".ply"
-
-  # print("Processing", file_name)
-
+  from helpers import read_roof_cloud, normalize_cloud
+  file_name = "32-1-510-215-53-test-1.ply"
   cloud = read_roof_cloud(file_name)
-
   cloud = normalize_cloud(cloud)
-  # o3d.visualization.draw_geometries([cloud])
-
   print(cloud)
 
-  f = LowerVoxel(cloud)
-
-  project_folder = get_project_folder()
-  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/edge_voxel/images/' + file_name_base + '/')
-  
-  # Create folder if not exists
-  if not os.path.exists(image_folder):
-    os.makedirs(image_folder)
-
-  print('Start running...')
-
-  all_labels = f.run()
-
-  print('Done running! Start saving...', end='')
-
-  # Create window
-  vis = o3d.visualization.Visualizer()
-  vis.create_window(width=1000, height=1000)
-  vis.add_geometry(cloud)
-
-  for label_i in range(all_labels.shape[0]):
-    labels = all_labels[label_i]
-    save_scaled_feature_image(vis, cloud, labels, image_folder, str(label_i))
-
-
-  labels = np.sum(all_labels, axis=0)
-
-  save_scaled_feature_image(vis, cloud, labels, image_folder, "Combined")
-
-  print('done!')
-
-  vis.destroy_window()
+  state = SmallScalableFeatureState(cloud)
+  f = EdgeVoxels(state)
+  f.run_test('edge_voxel')

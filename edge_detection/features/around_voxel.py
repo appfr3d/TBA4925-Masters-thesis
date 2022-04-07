@@ -15,7 +15,7 @@ from feature import VoxelFeature
 
 outer_sides = [[0,1,2,3,4], [4,9,13,18,23], [19,20,21,22,23], [0,5,10,14,29]]
 inner_sides = [[6,7,8], [8,12,17], [15,16,17], [6,11,15]]
-class UpperVoxel(VoxelFeature):
+class UpperVoxels(VoxelFeature):
   def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
   # o3d.visualization.draw_geometries([cloud])
 
-  f = UpperVoxel(cloud)
+  f = UpperVoxels(cloud)
 
   project_folder = get_project_folder()
   image_folder = os.path.join(project_folder, 'edge_detection/results/feature/around_voxel/images/' + file_name_base + '/')
