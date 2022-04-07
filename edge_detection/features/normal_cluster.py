@@ -8,34 +8,38 @@ from feature import ScalableFeature
 #       OBS: must normalize point clouds before saving them to use this feature!
 #             or else we will loose a lot of precision...
 #####
+
+VISUALIZE = True
+
 class NormalCluster(ScalableFeature):
   def preprocess_whole_cloud(self):
     # Add normals to cloud
     self.cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=2, max_nn=80))
     self.cloud.orient_normals_consistent_tangent_plane(30)
 
-    # Visualize for presentation
-    o3d.visualization.draw_geometries([self.cloud])
+    if VISUALIZE:
+      # Visualize for presentation
+      o3d.visualization.draw_geometries([self.cloud])
 
-    # Show normals from (0,0,0)
-    c = o3d.geometry.PointCloud()
-    c.points = self.cloud.normals
-    c.normals = self.cloud.normals
+      # Show normals from (0,0,0)
+      c = o3d.geometry.PointCloud()
+      c.points = self.cloud.normals
+      c.normals = self.cloud.normals
 
-    center = o3d.geometry.PointCloud()
-    s = np.asarray(self.cloud.points).shape
-    center.points = o3d.utility.Vector3dVector(np.zeros(s))
-    center.normals = self.cloud.normals
-    center.colors = o3d.utility.Vector3dVector(np.zeros(s) + [1, 0, 0])
-    o3d.visualization.draw_geometries([c, center])
+      center = o3d.geometry.PointCloud()
+      s = np.asarray(self.cloud.points).shape
+      center.points = o3d.utility.Vector3dVector(np.zeros(s))
+      center.normals = self.cloud.normals
+      center.colors = o3d.utility.Vector3dVector(np.zeros(s) + [1, 0, 0])
+      o3d.visualization.draw_geometries([c, center])
 
-    labels = np.array(c.cluster_dbscan(eps=0.1, min_points=100))
-    colors = np.zeros((labels.shape[0], 3))
-    colors += [0.6, 0.6, 0.6]
-    colors[labels < 0] = [0, 1, 0] # Color positive values as green
-    c.colors = o3d.utility.Vector3dVector(colors[:, :3])
-    c.points = self.cloud.points
-    o3d.visualization.draw_geometries([c])
+      labels = np.array(c.cluster_dbscan(eps=0.1, min_points=100))
+      colors = np.zeros((labels.shape[0], 3))
+      colors += [0.6, 0.6, 0.6]
+      colors[labels < 0] = [0, 1, 0] # Color positive values as green
+      c.colors = o3d.utility.Vector3dVector(colors[:, :3])
+      c.points = self.cloud.points
+      o3d.visualization.draw_geometries([c])
 
     # Create KDTree
     self.kd_tree = o3d.geometry.KDTreeFlann(self.cloud)
@@ -67,7 +71,7 @@ class NormalCluster(ScalableFeature):
 if __name__ == "__main__":
   import os
   from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image
-  file_name_base = "32-1-510-215-53-test-2"
+  file_name_base = "32-1-510-215-53-test-1"
   file_name = file_name_base + ".ply"
   cloud = read_roof_cloud(file_name)
 

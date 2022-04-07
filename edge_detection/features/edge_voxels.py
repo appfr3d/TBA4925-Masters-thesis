@@ -55,20 +55,7 @@ class LowerVoxel(SmallVoxelFeature):
     # Presmooth occupancy_grid
     occupancy_grid = gaussian_filter(occupancy_grid, sigma=1)
 
-
-
-    # for voxel_i in range(voxels.shape[0]):
-    #   grid_index = tuple(voxels[voxel_i].grid_index)
-
-    #   neighborhood = np.zeros((K, K, K))
-    #   for x in range(-H, H+1):
-    #     for y in range(-H, H+1):
-    #       for z in range(-H, H+1):
-    #         neighbor_grid_index = (grid_index[0] + x, grid_index[1] + y, grid_index[2] + z)
-    #         # neighborhood[neighbor_grid_index] = 
-
-    #   g = gaussian_filter(neighborhood[:,:,:,i], sigma=1)
-
+    # Store exponent * presmoothed occupancy_grid in voxels_with_neighbors
     voxels_with_neighbors = {}
     for voxel_i in range(voxels.shape[0]):
       grid_index = tuple(voxels[voxel_i].grid_index)
@@ -92,58 +79,9 @@ class LowerVoxel(SmallVoxelFeature):
               exponent = np.exp(-(x_part + y_part + z_part))
               voxels_with_neighbors[neighbor_grid_index] = exponent * occupancy_grid[neighbor_grid_index]
 
-              # occupancy_grid[neighbor_grid_index]
-              
-              # query = o3d.utility.Vector3dVector(np.array([[Xp, Yp, Zp]]))
-              # if self.voxel_grid.check_if_included(query):
-              #   x_part = np.power(Xp, 2) / np.power(H/2, 2)
-              #   y_part = np.power(Yp, 2) / np.power(H/2, 2)
-              #   z_part = np.power(Zp, 2) / np.power(H/2, 2)
-
-              #   exponent = np.exp(-(x_part + y_part + z_part))
-              #   voxels_with_neighbors[neighbor_grid_index] = exponent
-              # else:
-              #   # TODO: presmooth binary values so voxels with many neighbors are somewhat included
-              #   # This will also fix the slow query search
-              #   voxels_with_neighbors[neighbor_grid_index] = 0
-              
-              # print(exponent)
-              
-
-
-
-    # For each voxel in the full-dict
-    #   Calculate Ix, Iy, Iz
-    #   Calculate Ixx, Ixy, etc
-    #   Store as [Ixx, Iyy, Izz, Ixy, Ixz, Iyz]
-    # for grid_index in voxels_with_neighbors.keys():
-    #   x_part = np.power(grid_index[0], 2) / np.power(H/2, 2)
-    #   y_part = np.power(grid_index[1], 2) / np.power(H/2, 2)
-    #   z_part = np.power(grid_index[2], 2) / np.power(H/2, 2)
-
-      # print('x_part, y_part, z_part', x_part, y_part, z_part)
-      # OBS: bug with exponent. Values become 0 or inf
-      # exponent = np.exp(-(x_part + y_part + z_part)) # 1 # x_part + y_part + z_part # 
-
-      # OBS: Not sure to multiply with grid_index or not here...
-      # Ix = - grid_index[0] * exponent
-      # Iy = - grid_index[1] * exponent
-      # Iz = - grid_index[2] * exponent
-
-      # print('Ix, Iy, Iz', Ix, Iy, Iz)
-
-      # Stored as [Ixx, Iyy, Izz, Ixy, Ixz, Iyz] 
-      # voxels_with_neighbors[grid_index] = np.array([Ix*Ix, Iy*Iy, Iz*Iz, Ix*Iy, Ix*Iz, Iy*Iz]) 
-
-    # For all occupied voxels v
-    #   Calculate Axx = G*Ix^2, Axy=G*IxIy, etc
-    #   Calculate A(v) matrix
-    #   Calculate eigen values for A(v) matrix, and sort
-    #   Classify voxel v based on eigen values
+    # 
     for voxel_i in range(voxels.shape[0]):
       grid_index = tuple(voxels[voxel_i].grid_index)
-      
-      # voxel_center = self.voxel_grid.get_voxel_center_coordinate(grid_index)
 
       I_neighborhood = np.zeros((K, K, K, 6))
       for x in range(-H, H+1):
@@ -166,9 +104,6 @@ class LowerVoxel(SmallVoxelFeature):
       structure_tensor_values = np.zeros(6)
       for i in range(6):
         g = gaussian_filter(I_neighborhood[:,:,:,i], sigma=1)
-        # print(g)
-        # print(type(g))
-        # print(g.shape)
         structure_tensor_values[i] = g[H, H, H]
 
       structure_tensor = np.array([
@@ -207,23 +142,23 @@ class LowerVoxel(SmallVoxelFeature):
       colored_voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=scale)
       o3d.visualization.draw([colored_voxels])
 
-    fig, axs = plt.subplots(1, 4)
-    fig.suptitle('Histogram of smallest, middle and largest eigen values')
+      fig, axs = plt.subplots(1, 4)
+      fig.suptitle('Histogram of smallest, middle and largest eigen values')
 
-    axs[0].hist(smallest)
-    axs[0].set_title('Smallest')
+      axs[0].hist(smallest)
+      axs[0].set_title('Smallest')
 
-    axs[1].hist(middle)
-    axs[1].set_title('Middle')
+      axs[1].hist(middle)
+      axs[1].set_title('Middle')
 
-    axs[2].hist(largest)
-    axs[2].set_title('Largest')
+      axs[2].hist(largest)
+      axs[2].set_title('Largest')
 
-    ratio = smallest/middle
-    axs[3].hist(ratio)
-    axs[3].set_title('All ratio')
-    
-    plt.show()
+      ratio = smallest/middle
+      axs[3].hist(ratio)
+      axs[3].set_title('All ratio')
+      
+      plt.show()
 
 
     return labels 

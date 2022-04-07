@@ -65,9 +65,10 @@ class UpperVoxel(VoxelFeature):
 if __name__ == "__main__":
   import os
   from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image
-  file_name_base = "32-1-510-215-53-test-3"
+  file_name_base = "32-1-510-215-53-test-1"
   file_name = file_name_base + ".ply"
   cloud = read_roof_cloud(file_name)
+
 
   # o3d.visualization.draw_geometries([cloud])
 

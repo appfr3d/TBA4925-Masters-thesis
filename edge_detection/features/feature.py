@@ -12,7 +12,7 @@ class Feature():
     pass
 
 NUM_SCALES = 8
-VISUALIZE_VOXELS = True
+VISUALIZE_VOXELS = False
 
 class ScalableFeature(Feature):
   def run(self):
@@ -148,7 +148,7 @@ class SmallVoxelFeature():
       mean_distances[point_i] = mean_dist(point, self.points[idx[1:]])
     
     min_scale = np.mean(mean_distances)
-    scales = [min_scale, min_scale * 1.5]
+    scales = [min_scale * 0.5, min_scale, min_scale * 1.5]
 
     # Preprocess if needed
     self.preprocess_whole_cloud()
