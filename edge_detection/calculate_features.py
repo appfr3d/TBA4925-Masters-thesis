@@ -17,7 +17,7 @@ from features.knn_centroid_distance import kNNCentroidDistance
 from features.normal_cluster import NormalCluster
 from features.covariance_eigenvalue import CovarianceEigenvalue
 
-test_file_names = ["32-1-510-215-53-test-1.ply", "32-1-510-215-53-test-2.ply", "32-1-510-215-53-test-3.ply"] 
+test_file_names = ["32-1-510-215-53-test-4.ply", "32-1-510-215-53-test-5.ply"] 
 
 def get_point_lables(file_name):
   roof_folder = get_roof_folder()
