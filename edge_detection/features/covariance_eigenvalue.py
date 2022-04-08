@@ -1,6 +1,6 @@
 import numpy as np
 import open3d as o3d
-from feature import ScalableFeature, ScalableFeatureState
+from features.feature import ScalableFeature, ScalableFeatureState
 from matplotlib import pyplot as plt
 
 
@@ -34,6 +34,7 @@ class CovarianceEigenvalue(ScalableFeature):
       middle[point_i] = eigen_values_sorted[1]
       largest[point_i] = eigen_values_sorted[2]
     
+    '''
     fig, axs = plt.subplots(1, 5)
     fig.suptitle('Histogram of smallest, middle and largest eigen values')
 
@@ -55,6 +56,7 @@ class CovarianceEigenvalue(ScalableFeature):
     axs[4].set_title('Chosen ratio')
     
     plt.show()
+    '''
 
     # Post process to correct labales
     max_l = np.max(labels)
@@ -78,7 +80,7 @@ class CovarianceEigenvalue(ScalableFeature):
 
     # Threshold in the middle of the largest gap
     threshold = labels_sorted[largest_gap[1]] + largest_gap[0]*0.5
-    print('treshold', threshold)
+    # print('treshold', threshold)
 
     labels_real = labels_scaled - threshold
 

@@ -6,10 +6,14 @@ def get_project_folder():
   current_folder = os.path.dirname(os.path.abspath(__file__))
   return os.path.dirname(os.path.dirname(current_folder))
 
+def get_roof_folder():
+  project_folder = get_project_folder()
+  return os.path.join(project_folder, "data/point_clouds/classified_roofs")
+
 def read_roof_cloud(file_name):
   project_folder = get_project_folder()
   data_folder = os.path.join(project_folder, "data/point_clouds")
-  roof_path = os.path.join(data_folder, "roofs", file_name)
+  roof_path = os.path.join(data_folder, "classified_roofs", file_name)
 
   cloud = o3d.io.read_point_cloud(roof_path)
   return cloud

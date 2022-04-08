@@ -3,11 +3,11 @@ import copy
 from xmlrpc.client import boolean
 import numpy as np
 import open3d as o3d
-from helpers import dist, mean_dist, read_roof_cloud, get_project_folder, save_scaled_feature_image, normalize_cloud
+from features.helpers import dist, mean_dist, read_roof_cloud, get_project_folder, save_scaled_feature_image, normalize_cloud
 
 
 NUM_SCALES = 8
-VISUALIZE_VOXELS = True
+VISUALIZE_VOXELS = False
 class FeatureState():
   def __init__(self, cloud: o3d.geometry.PointCloud) -> None:
     self.cloud = copy.deepcopy(cloud)
@@ -108,7 +108,7 @@ class ScalableFeature(Feature):
   def run(self):
     labels = np.zeros((NUM_SCALES, self.state.points.shape[0]))
     for scale_i, scale in enumerate(self.state.scales):
-      print('Calculating scale', scale_i)
+      print('Calculating scale', scale_i, 'with size:', scale)
       scale_labels = self.run_at_scale(scale)
       labels[scale_i] = scale_labels
     return labels

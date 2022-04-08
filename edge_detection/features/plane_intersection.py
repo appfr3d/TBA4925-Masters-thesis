@@ -1,7 +1,7 @@
 import open3d as o3d
 import copy
-from feature import Feature
-from helpers import plane_intersect, point_to_line_distance
+from features.feature import Feature
+from features.helpers import plane_intersect, point_to_line_distance
 
 class PlaneIntersection(Feature):
   def run(self):

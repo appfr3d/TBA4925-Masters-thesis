@@ -1,6 +1,6 @@
 import numpy as np
 import open3d as o3d
-from feature import ScalableFeature, ScalableFeatureState
+from features.feature import ScalableFeature, ScalableFeatureState
 
 
 

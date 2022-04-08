@@ -1,7 +1,7 @@
 import numpy as np
 import open3d as o3d
-from feature import Feature, FeatureState
-from helpers import dist, mean_dist
+from features.feature import Feature, FeatureState
+from features.helpers import dist, mean_dist
 
 
 #####

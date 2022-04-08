@@ -1,7 +1,7 @@
 import copy
 import numpy as np
 import open3d as o3d
-from feature import VoxelFeature, ScalableFeatureState
+from features.feature import VoxelFeature, ScalableFeatureState
 
 
 # OBS: voxel.grid_index !== voxel_grid.get_voxel_center_coordinate(voxel.grid_index)

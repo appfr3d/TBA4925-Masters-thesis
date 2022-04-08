@@ -2,7 +2,7 @@ import numpy as np
 import open3d as o3d
 from scipy.ndimage import gaussian_filter
 from matplotlib import pyplot as plt
-from feature import SmallVoxelFeature, SmallScalableFeatureState
+from features.feature import SmallVoxelFeature, SmallScalableFeatureState
 
 H = 2
 K = 2*H + 1
