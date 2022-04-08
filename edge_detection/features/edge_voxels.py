@@ -153,11 +153,11 @@ class EdgeVoxels(SmallVoxelFeature):
 
 if __name__ == "__main__":
   from helpers import read_roof_cloud, normalize_cloud
-  file_name = "32-1-510-215-53-test-1.ply"
+  file_name = "32-1-510-215-53-test-3.ply"
   cloud = read_roof_cloud(file_name)
   cloud = normalize_cloud(cloud)
   print(cloud)
 
   state = SmallScalableFeatureState(cloud)
   f = EdgeVoxels(state)
-  f.run_test('edge_voxel')
+  f.run_test('edge_voxel', file_name)

@@ -1,6 +1,6 @@
 import numpy as np
 import open3d as o3d
-from feature import VoxelFeature
+from feature import VoxelFeature, ScalableFeatureState
 
 
 # OBS: voxel.grid_index !== voxel_grid.get_voxel_center_coordinate(voxel.grid_index)
@@ -8,30 +8,24 @@ from feature import VoxelFeature
 # TODO: Must segment some roofs into different types of edges and corners.
 #       Then I need to calculate many different neighborhood matrises and average over the segmented values
 
-# Edge if:
-# * No voxels below in neighborhood 
-# * Max 3 voxels in same z neighborhood
+# Edge if no voxels below in neighborhood 
+H = 3
+K = 2*H + 1
+
 class LowerVoxels(VoxelFeature):
   def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
-    labels = np.ones(self.points.shape[0])*-1 # Default to not a upper_voxel
+    labels = np.ones(self.state.points.shape[0])*-1 # Default to not a upper_voxel
 
     for voxel_i in range(voxels.shape[0]):
       # Check if there are neighboring voxels straight or diagonally below.
       grid_index = voxels[voxel_i].grid_index
-      center = self.voxel_grid.get_voxel_center_coordinate(grid_index)
+      voxel_center = self.voxel_grid.get_voxel_center_coordinate(grid_index)
 
       # All neighbors below current voxel
-      below_neighbors = np.zeros((3*3*2*2, 3))
-      n = 0
-      for x in [-1,0,1]:
-        for y in [-1,0,1]:
-          for h in range(1, 3):
-            for s in range(1, 3):
-              point = np.array([center[0]+scale*x*s, center[1]+scale*y*s, center[2]-scale*h])
-              below_neighbors[n] = point
-              n += 1
+      neighbor_point = lambda x, y: [voxel_center[0]+scale*x, voxel_center[1]+scale*y, voxel_center[2]-scale]
+      below_neighbors = np.array([neighbor_point(x, y) for x in range(-H, H+1) for y in range(-H, H+1)])
 
       below_query = o3d.utility.Vector3dVector(below_neighbors)
 
@@ -51,8 +45,8 @@ class LowerVoxels(VoxelFeature):
     # Visualize colored voxels
     if visualize:
       pcd = o3d.geometry.PointCloud()
-      pcd.points = o3d.utility.Vector3dVector(self.points)
-      colors = np.asarray(self.cloud.colors)
+      pcd.points = o3d.utility.Vector3dVector(self.state.points)
+      colors = np.asarray(self.state.cloud.colors)
       colors[labels >= 0] = [0, 1, 0] # Color positive values as green
       pcd.colors = o3d.utility.Vector3dVector(colors)
 
@@ -63,42 +57,12 @@ class LowerVoxels(VoxelFeature):
 
 
 if __name__ == "__main__":
-  import os
-  from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image
-  file_name_base = "32-1-510-215-53-test-1"
-  file_name = file_name_base + ".ply"
-
-  # print("Processing", file_name)
-
+  from helpers import read_roof_cloud, normalize_cloud
+  file_name = "32-1-510-215-53-test-1.ply"
   cloud = read_roof_cloud(file_name)
-
-  # o3d.visualization.draw_geometries([cloud])
-
+  cloud = normalize_cloud(cloud)
   print(cloud)
 
-  f = LowerVoxels(cloud)
-
-  project_folder = get_project_folder()
-  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/lower_voxel/images/' + file_name_base + '/')
-  
-  # Create folder if not exists
-  if not os.path.exists(image_folder):
-    os.makedirs(image_folder)
-
-  all_labels = f.run()
-
-  # Create window
-  vis = o3d.visualization.Visualizer()
-  vis.create_window(width=1000, height=1000)
-  vis.add_geometry(cloud)
-
-  for label_i in range(all_labels.shape[0]):
-    labels = all_labels[label_i]
-    save_scaled_feature_image(vis, cloud, labels, image_folder, str(label_i))
-
-
-  labels = np.sum(all_labels, axis=0)
-
-  save_scaled_feature_image(vis, cloud, labels, image_folder, "Combined")
-
-  vis.destroy_window()
+  state = ScalableFeatureState(cloud)
+  f = LowerVoxels(state)
+  f.run_test('lower_voxel', file_name)

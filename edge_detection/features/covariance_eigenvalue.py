@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
   state = ScalableFeatureState(cloud)
   f = CovarianceEigenvalue(state)
-  f.run_test('covariance_eigenvalue')
+  f.run_test('covariance_eigenvalue', file_name)
 
 
 
