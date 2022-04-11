@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import pandas as pd
 import open3d as o3d
@@ -17,7 +18,7 @@ from features.knn_centroid_distance import kNNCentroidDistance
 from features.normal_cluster import NormalCluster
 from features.covariance_eigenvalue import CovarianceEigenvalue
 
-test_file_names = ["32-1-510-215-53-test-4.ply", "32-1-510-215-53-test-5.ply"] 
+test_file_names = ["32-1-510-215-53-test-2.ply"] 
 
 def get_point_lables(file_name):
   roof_folder = get_roof_folder()
@@ -76,7 +77,10 @@ def main():
     for feature in features:
       feature_name = feature.__class__.__name__
       print("Calculating feature", feature_name)
+      tic = time.perf_counter()
       labels = feature.run()
+      toc = time.perf_counter()
+      print(f"Feature {feature_name} took {toc - tic:0.4f} seconds to run")
       store_labels(labels, feature_name)
 
     # print(labels_df.head())

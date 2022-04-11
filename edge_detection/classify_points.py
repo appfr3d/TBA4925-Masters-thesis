@@ -14,7 +14,7 @@ def get_dataset_path(file_name):
   return os.path.join(project_folder, "data/point_clouds/classified_roofs/calculated_values", file_name)
 
 training_data_file_names = ["32-1-510-215-53-test-1.csv", "32-1-510-215-53-test-2.csv", "32-1-510-215-53-test-3.csv"] 
-evaluation_data_file_names = ["32-1-510-215-53-test-5.csv"]
+evaluation_data_file_names = ["32-1-510-215-53-test-4.csv", "32-1-510-215-53-test-5.csv"]
 
 def calculate_weight(targets):
   one_targets = sum([1 if x == 1 else 0 for x in targets])
@@ -47,17 +47,16 @@ def main():
   )
 
   model = CatBoostClassifier(
-    iterations=5,
-    learning_rate=0.1,
+    iterations=50,
+    learning_rate=0.05,
     random_seed=42,
-    silent=True
   )
 
   # model = CatBoostClassifier(
   #   iterations=700,
   #   # use_best_model=True,
-  #   eval_metric='AUC',
-  #   od_type='Iter',
+  #   eval_metric="AUC",
+  #   od_type="Iter",
   #   od_wait=40,
 
   #   learning_rate=0.07650534937760373, 
@@ -67,7 +66,7 @@ def main():
   #   border_count=254,
 
   #   random_seed=42,
-  #   loss_function='RMSE',
+  #   loss_function="RMSE",
   #   verbose=True,
 
   #   eval_set
@@ -75,6 +74,13 @@ def main():
 
   model.fit(train_pool, eval_set=(X_validation, y_validation), verbose=True)
 
+  # Calculate feature importance
+  feature_importance_list = model.get_feature_importance(type="FeatureImportance")
+  feature_list = features.columns.tolist()
+  feature_importance = pd.DataFrame({"feature": feature_list, "importance": feature_importance_list})
+  feature_importance.sort_values(by=["importance"], ascending=[False], inplace=True)
+  print("\nFeature importance:")
+  print(feature_importance)
 
   evaluation_data = pd.DataFrame()
   for file_name in evaluation_data_file_names:
@@ -102,16 +108,21 @@ def main():
   print("\tRecall           :", recall)
 
   # Visualize result
-  pcd = o3d.geometry.PointCloud()
-  points = evaluation_data[["x","y","z"]].to_numpy()
-  pcd.points = o3d.utility.Vector3dVector(points)
+  for file_name in evaluation_data_file_names:
+    visualization_data = pd.read_csv(get_dataset_path(file_name), index_col=0)
+    visualization_features = visualization_data.drop("target", axis=1)
 
-  colors = np.zeros((predictions.shape[0], 3))
-  colors += [0.6, 0.6, 0.6]
-  colors[predictions < 0.5] = [0, 1, 0] # Color positive values as green
+    predictions = model.predict(visualization_features)
+    pcd = o3d.geometry.PointCloud()
+    points = visualization_data[["x","y","z"]].to_numpy()
+    pcd.points = o3d.utility.Vector3dVector(points)
 
-  pcd.colors = o3d.utility.Vector3dVector(colors)
-  o3d.visualization.draw_geometries([pcd])
+    colors = np.zeros((predictions.shape[0], 3))
+    colors += [0.6, 0.6, 0.6]
+    colors[predictions < 0.5] = [0, 1, 0] # Color positive values as green
+
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+    o3d.visualization.draw_geometries([pcd])
 
 
 if __name__ == "__main__":

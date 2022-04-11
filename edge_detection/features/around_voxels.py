@@ -3,7 +3,6 @@ import numpy as np
 import open3d as o3d
 from features.feature import VoxelFeature, ScalableFeatureState
 
-
 # OBS: voxel.grid_index !== voxel_grid.get_voxel_center_coordinate(voxel.grid_index)
 
 # TODO: Must segment some roofs into different types of edges and corners.
@@ -102,40 +101,3 @@ if __name__ == "__main__":
   state = ScalableFeatureState(cloud)
   f = AroundVoxels(state)
   f.run_test('around_voxel', file_name)
-
-  '''
-  import os
-  from helpers import read_roof_cloud, get_project_folder, save_scaled_feature_image
-  file_name_base = "32-1-510-215-53-test-1"
-  file_name = file_name_base + ".ply"
-  cloud = read_roof_cloud(file_name)
-  
-  # o3d.visualization.draw_geometries([cloud])
-
-  f = UpperVoxels(cloud)
-
-  project_folder = get_project_folder()
-  image_folder = os.path.join(project_folder, 'edge_detection/results/feature/around_voxel/images/' + file_name_base + '/')
-  
-  # Create folder if not exists
-  if not os.path.exists(image_folder):
-    os.makedirs(image_folder)
-
-  all_labels = f.run()
-
-  # Create window
-  vis = o3d.visualization.Visualizer()
-  vis.create_window(width=1000, height=1000)
-  vis.add_geometry(cloud)
-
-  for label_i in range(all_labels.shape[0]):
-    labels = all_labels[label_i]
-    save_scaled_feature_image(vis, cloud, labels, image_folder, str(label_i))
-
-
-  labels = np.sum(all_labels, axis=0)
-
-  save_scaled_feature_image(vis, cloud, labels, image_folder, "Combined")
-
-  vis.destroy_window()
-  '''
