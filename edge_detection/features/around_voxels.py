@@ -20,7 +20,7 @@ class AroundVoxels(VoxelFeature):
   def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
-    labels = np.ones(self.state.points.shape[0])*-1 # Default to not a around_voxel
+    labels = np.zeros(self.state.points.shape[0]) # Default to not a around_voxel
 
     # Evaluate each voxel
     for voxel_i in range(voxels.shape[0]):
@@ -73,16 +73,17 @@ class AroundVoxels(VoxelFeature):
       directions = np.all(directions, axis=1)
 
       # If they are a upper_voxel, store it in the labels
-      if np.sum(directions) >= 1:
+      num_direction = np.sum(directions)
+      if num_direction >= 1:
         point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
-        labels[point_indices] = 1
+        labels[point_indices] = num_direction / directions.shape[0]
 
     # Visualize colored voxels
     if visualize:
       pcd = o3d.geometry.PointCloud()
       pcd.points = o3d.utility.Vector3dVector(self.state.points)
       colors = np.asarray(copy.deepcopy(self.state.cloud.colors))
-      colors[labels >= 0] = [0, 1, 0] # Color positive values as green
+      colors[labels > 0] = [0, 1, 0] # Color positive values as green
       pcd.colors = o3d.utility.Vector3dVector(colors)
       
       colored_voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=scale)

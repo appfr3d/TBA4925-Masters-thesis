@@ -106,18 +106,18 @@ class EdgeVoxels(SmallVoxelFeature):
 
       # print('eigen_values_sorted', eigen_values_sorted)
 
-
       smallest[voxel_i] = eigen_values_sorted[0]
       middle[voxel_i] = eigen_values_sorted[1]
       largest[voxel_i] = eigen_values_sorted[2]
 
-      # TODO: refine this condition
-      # condition = smallest[voxel_i] < 0.1 and middle[voxel_i] > 0.1
-      condition = smallest[voxel_i] > middle[voxel_i] * 0.3
-      # print('condition:', condition)
-      if condition:
-        point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
-        labels[point_indices] = 1
+      point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
+      # print("condition value:", smallest[voxel_i] / middle[voxel_i])
+      labels[point_indices] = smallest[voxel_i] / middle[voxel_i]
+
+    # Post process to correct labales
+    max_l = np.max(labels)
+    scale_fn = lambda val: (1/max_l)*val
+    labels_scaled = scale_fn(labels)
 
     # Visualize colored voxels
     if visualize:
@@ -148,7 +148,7 @@ class EdgeVoxels(SmallVoxelFeature):
       
       plt.show()
 
-    return labels 
+    return labels_scaled 
 
 
 if __name__ == "__main__":

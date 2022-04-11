@@ -18,7 +18,6 @@ def read():
 
 def write(cloud):
   return o3d.io.write_point_cloud("../data/point_clouds/classified_roofs/with_normal/32-1-510-215-53-test-1.ply", cloud, print_progress=True)
-  pass
 
 # Create Open3d point cloud from numpy array
 def create(array):

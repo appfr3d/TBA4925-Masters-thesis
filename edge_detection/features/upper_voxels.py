@@ -15,7 +15,7 @@ class UpperVoxels(VoxelFeature):
   def run_at_scale(self, scale=float, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
-    labels = np.ones(self.state.points.shape[0])*-1 # Default to not a upper_voxel
+    labels = np.zeros(self.state.points.shape[0]) # Default to not a upper_voxel
 
     for voxel_i in range(voxels.shape[0]):
       # Check if there are neighboring voxels straight or diagonally above.
@@ -44,9 +44,9 @@ class UpperVoxels(VoxelFeature):
     # Visualize colored voxels
     if visualize:
       pcd = o3d.geometry.PointCloud()
-      pcd.points = o3d.utility.Vector3dVector(self.points)
-      colors = np.asarray(self.cloud.colors)
-      colors[labels >= 0] = [0, 1, 0] # Color positive values as green
+      pcd.points = o3d.utility.Vector3dVector(self.state.points)
+      colors = np.asarray(self.state.cloud.colors)
+      colors[labels > 0] = [0, 1, 0] # Color positive values as green
       pcd.colors = o3d.utility.Vector3dVector(colors)
 
       colored_voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=scale)

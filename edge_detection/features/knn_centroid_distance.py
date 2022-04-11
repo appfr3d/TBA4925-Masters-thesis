@@ -29,7 +29,14 @@ class kNNCentroidDistance(Feature):
 
       labels[point_i] = dist(centroid, point) - l*min_dist
 
-    return labels
+    min_l = np.min(labels)
+    labels +=  np.abs(min_l)
+    max_l = np.max(labels)
+
+    scale_fn = lambda val: (1/max_l)*val
+    labels_scaled = scale_fn(labels)
+
+    return labels_scaled
     
 
 if __name__ == "__main__":

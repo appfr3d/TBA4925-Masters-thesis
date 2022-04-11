@@ -1,5 +1,7 @@
-import numpy as np
 import os
+from matplotlib import cm
+from matplotlib.colors import LinearSegmentedColormap
+import numpy as np
 import open3d as o3d
 
 def get_project_folder():
@@ -34,12 +36,10 @@ def write_roof_cloud_result(file_name, cloud):
   return o3d.io.write_point_cloud(os.path.join(results_folder, file_name), cloud, print_progress=True)
 
 def save_scaled_feature_image(vis, cloud, labels, image_folder, scale_name):
-  colors = np.zeros((labels.shape[0], 3))
-  colors += [0.6, 0.6, 0.6]
-  
-  colors[labels >= 0] = [0, 1, 0] # Color positive values as green
-
+  colormap = cm.get_cmap('rainbow') 
+  colors = np.array([colormap(l) for l in labels])
   cloud.colors = o3d.utility.Vector3dVector(colors[:, :3])
+
   vis.update_geometry(cloud)
   vis.update_renderer()
   vis.poll_events()

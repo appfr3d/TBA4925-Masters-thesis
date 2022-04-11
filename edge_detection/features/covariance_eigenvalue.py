@@ -33,30 +33,6 @@ class CovarianceEigenvalue(ScalableFeature):
       smallest[point_i] = eigen_values_sorted[0]
       middle[point_i] = eigen_values_sorted[1]
       largest[point_i] = eigen_values_sorted[2]
-    
-    '''
-    fig, axs = plt.subplots(1, 5)
-    fig.suptitle('Histogram of smallest, middle and largest eigen values')
-
-    axs[0].hist(smallest)
-    axs[0].set_title('Smallest')
-
-    axs[1].hist(middle)
-    axs[1].set_title('Middle')
-
-    axs[2].hist(largest)
-    axs[2].set_title('Largest')
-
-    ratio = middle/largest
-    axs[3].hist(ratio)
-    axs[3].set_title('All ratio')
-
-    chosen_ratio = ratio[np.bitwise_and(smallest < 0.1, largest > 0.1)]
-    axs[4].hist(chosen_ratio)
-    axs[4].set_title('Chosen ratio')
-    
-    plt.show()
-    '''
 
     # Post process to correct labales
     max_l = np.max(labels)
@@ -65,26 +41,27 @@ class CovarianceEigenvalue(ScalableFeature):
     # (1/max_l)*eigen
     # k = 1
     # np.arctan(k*eigen)/np.pi*0.5
-    scale = lambda eigen: (1/max_l)*eigen
-    labels_scaled = scale(labels)
+    scale_fn = lambda eigen: (1/max_l)*eigen
+    labels_scaled = scale_fn(labels)
 
     # Calculate threshold
-    labels_sorted = np.sort(labels_scaled)
-    largest_gap = [0, 0] # value, index
-    for i in range(labels_sorted.shape[0] - 1):
-      gap = labels_sorted[i+1] - labels_sorted[i]
+    # labels_sorted = np.sort(labels_scaled)
+    # largest_gap = [0, 0] # value, index
+    # for i in range(labels_sorted.shape[0] - 1):
+    #   gap = labels_sorted[i+1] - labels_sorted[i]
 
-      # There can be noise in the dataset, so only look at the 95% first
-      if gap > largest_gap[0] and i < labels_sorted.shape[0]*0.95:
-        largest_gap = [gap, i]
+    #   # There can be noise in the dataset, so only look at the 95% first
+    #   if gap > largest_gap[0] and i < labels_sorted.shape[0]*0.95:
+    #     largest_gap = [gap, i]
 
-    # Threshold in the middle of the largest gap
-    threshold = labels_sorted[largest_gap[1]] + largest_gap[0]*0.5
+    # # Threshold in the middle of the largest gap
+    # self.thresholds[self.state.scales.index(scale)] = labels_sorted[largest_gap[1]] + largest_gap[0]*0.5
+    # threshold = labels_sorted[largest_gap[1]] + largest_gap[0]*0.5
     # print('treshold', threshold)
 
-    labels_real = labels_scaled - threshold
+    # labels_real = labels_scaled - threshold
 
-    return labels_real
+    return labels_scaled
 
 if __name__ == "__main__":
   from helpers import read_roof_cloud, normalize_cloud

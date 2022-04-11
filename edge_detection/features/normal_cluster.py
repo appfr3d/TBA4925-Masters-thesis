@@ -12,6 +12,9 @@ from features.feature import ScalableFeature, ScalableFeatureState
 VISUALIZE = True
 
 class NormalCluster(ScalableFeature):
+  def config(self):
+    self.thresholds = list(0 for _ in self.state.scales)
+  
   def visualize_process(self):
     # Visualize for presentation
     o3d.visualization.draw_geometries([self.state.cloud])
@@ -38,7 +41,7 @@ class NormalCluster(ScalableFeature):
 
   def run_at_scale(self, scale=float):
     normals = np.asarray(self.state.cloud.normals)
-    labels = np.zeros(self.state.points.shape[0])
+    labels = np.zeros(self.state.points.shape[0]) # Default as a non-edge
 
     # Run through every point
     for point_i, point in enumerate(self.state.points):
@@ -51,11 +54,13 @@ class NormalCluster(ScalableFeature):
 
       # Cluster normals, minimum 20% of points needed to create a cluster
       current_labels = np.array(current_cloud.cluster_dbscan(eps=0.1, min_points=np.floor_divide(k, 5)))
-      if current_labels[0] >= 0:
-        labels[point_i] = -1
-      else:
-        # Store noise from dbscan as positive values
+
+      print('labels:', current_labels)
+
+      if current_labels[0] == -1:
+        # Store noise from dbscan as edges
         labels[point_i] = 1
+    
 
     return labels
 

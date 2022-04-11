@@ -83,23 +83,27 @@ class Feature():
     if not os.path.exists(image_folder):
       os.makedirs(image_folder)
 
-    # Create window
+    # Create window with normal-free point cloud
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = self.state.cloud.points
     vis = o3d.visualization.Visualizer()
     vis.create_window(width=1000, height=1000)
-    vis.add_geometry(self.state.cloud)
+    vis.add_geometry(pcd)
 
     if len(all_labels.shape) == 1:
       # Only global scale of labels
-      save_scaled_feature_image(vis, self.state.cloud, all_labels, image_folder, "Global")
+      # Remove treshold for visualization
+      save_scaled_feature_image(vis, pcd, all_labels, image_folder, "Global")
     else:
       # Several scales of labels
       for label_i in range(all_labels.shape[0]):
+        # Remove treshold for visualization
         labels = all_labels[label_i]
-        save_scaled_feature_image(vis, self.state.cloud, labels, image_folder, str(label_i))
+        save_scaled_feature_image(vis, pcd, labels, image_folder, str(label_i))
 
-      # Combine scales as last labels
-      labels = np.sum(all_labels, axis=0)
-      save_scaled_feature_image(vis, self.state.cloud, labels, image_folder, "Combined")
+      # Combine scales as last labels 
+      labels = np.divide(np.sum(all_labels, axis=0), all_labels.shape[0])
+      save_scaled_feature_image(vis, pcd, labels, image_folder, "Combined")
 
     vis.destroy_window()
     print('Done saving!')
