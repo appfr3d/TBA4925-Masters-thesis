@@ -26,10 +26,8 @@ def calculate_weight(targets):
   return [one_weight if target == 1 else zero_weight for target in targets]
 
 
-
 def run_classification():
-
-  remove_features = ["kNNCentroidDistance, NormalCluster"]
+  remove_features = ["kNNCentroidDistance"]
 
   training_data = pd.DataFrame()
   for file_name in training_data_file_names:
@@ -60,26 +58,6 @@ def run_classification():
     logging_level="Silent"
   )
 
-  # model = CatBoostClassifier(
-  #   iterations=700,
-  #   # use_best_model=True,
-  #   eval_metric="AUC",
-  #   od_type="Iter",
-  #   od_wait=40,
-
-  #   learning_rate=0.07650534937760373, 
-  #   depth=4,
-  #   l2_leaf_reg=4.4385423625938545,
-  #   one_hot_max_size=3,
-  #   border_count=254,
-
-  #   random_seed=42,
-  #   loss_function="RMSE",
-  #   verbose=True,
-
-  #   eval_set
-  # )
-
   model.fit(train_pool, eval_set=(X_validation, y_validation), verbose=True)
 
   # Calculate feature importance
@@ -95,7 +73,7 @@ def run_classification():
     data = pd.read_csv(get_dataset_path(file_name), index_col=0)
     evaluation_data = pd.concat([evaluation_data, data])
 
-  evaluation_features = evaluation_data.drop(["target"] + remove_fearutes, axis=1)
+  evaluation_features = evaluation_data.drop(["target"] + remove_features, axis=1)
   evaluation_targets = evaluation_data["target"].to_numpy()
 
   predictions = model.predict(evaluation_features)
