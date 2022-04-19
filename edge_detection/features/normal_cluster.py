@@ -55,8 +55,6 @@ class NormalCluster(ScalableFeature):
       # Cluster normals, minimum 20% of points needed to create a cluster
       current_labels = np.array(current_cloud.cluster_dbscan(eps=0.1, min_points=np.floor_divide(k, 5)))
 
-      print('labels:', current_labels)
-
       if current_labels[0] == -1:
         # Store noise from dbscan as edges
         labels[point_i] = 1

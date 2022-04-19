@@ -112,7 +112,7 @@ class ScalableFeature(Feature):
   def run(self):
     labels = np.zeros((NUM_SCALES, self.state.points.shape[0]))
     for scale_i, scale in enumerate(self.state.scales):
-      print('Calculating scale', scale_i, 'with size:', scale)
+      print('\t\tCalculating scale', scale_i, 'with size:', scale)
       scale_labels = self.run_at_scale(scale)
       labels[scale_i] = scale_labels
     return labels
@@ -124,7 +124,7 @@ class VoxelFeature(Feature):
   def run(self):
     labels = np.zeros((NUM_SCALES, self.state.points.shape[0]))
     for scale_i, scale in enumerate(self.state.scales):
-      print('Calculating scale', scale_i, 'with size:', scale)
+      print('\t\tCalculating scale', scale_i, 'with size:', scale)
       # Generate voxels
       self.voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(self.state.cloud, voxel_size=scale)
 
