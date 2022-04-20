@@ -1,5 +1,4 @@
 import os
-from xml.sax.handler import all_features
 import numpy as np
 import pandas as pd
 import open3d as o3d
@@ -27,16 +26,36 @@ def calculate_weight(targets):
 
 
 def run_classification():
-  remove_features = ["kNNCentroidDistance"]
-
   training_data = pd.DataFrame()
   for file_name in training_data_file_names:
     data = pd.read_csv(get_dataset_path(file_name), index_col=0)
     training_data = pd.concat([training_data, data])
 
-  # Split in traning and testing splits
+  # Remove feature groups
+  all_features = training_data.drop("target", axis=1)
+  feature_list = all_features.columns.tolist()
+
+  # removing "kNNCentroidDistance" gives better metric results, but not visually better results...
+  # "kNNCentroidDistance", "NormalCluster", "EdgeVoxels", "AroundVoxels", "UpperVoxels", "LowerVoxels"
+  remove_group_features = ["kNNCentroidDistance", "EdgeVoxels"]
+  remove_single_features = []
+
+  remove_features = []
+
+  # Remove groups
+  for feature_group_name in remove_group_features:
+    remove_features += [f for f in feature_list if f.startswith(feature_group_name)]
+
+  # Remove singles
+  remove_features += [f for f in remove_single_features if f not in remove_features]
+
+  print("Classifying without features:", remove_features)
+
   features = training_data.drop(["target"] + remove_features, axis=1)
   targets = training_data["target"]
+
+
+  # Split in traning and testing splits
   X_train, X_validation, y_train, y_validation = train_test_split(features, targets, train_size=0.8, random_state=1234)
 
   # Weight the edge /non-edge classes
@@ -52,7 +71,7 @@ def run_classification():
   )
 
   model = CatBoostClassifier(
-    iterations=50,
+    iterations=500,
     learning_rate=0.1,
     random_seed=42,
     logging_level="Silent"
@@ -89,12 +108,17 @@ def run_classification():
 
   # positives = np.sum(predictions)
   # negatives = predictions.shape[0] - positives
-  
 
   precision = precision_score(evaluation_targets, predictions)
   recall = recall_score(evaluation_targets, predictions)
+
+  # Formulas from: https://tomkwok.com/posts/iou-vs-f1/
+  iou = (precision*recall) / (precision + recall - (precision*recall))
+  f1 = (2*precision*recall)/(precision+recall)
   print("\tPrecision        :", precision)
   print("\tRecall           :", recall)
+  print("\tiou              :", iou)
+  print("\tF1               :", f1)
 
   # Visualize result
   for file_name in evaluation_data_file_names:
@@ -115,7 +139,6 @@ def run_classification():
 
 
 def test_feature_removal():
-
   worst_features = []
   test_again = True
 
@@ -138,11 +161,11 @@ def test_feature_removal():
     grouped_features = [[f for f in feature_list if f.startswith(feature_name)] for feature_name in features_names]
     # grouped_features = [[feature_name] for feature_name in features_names]
 
-    drop_features = [[f for f in feature_list if f.startswith(feature_name)] for feature_name in worst_features]
+    drop_features = [f for feature_name in worst_features for f in feature_list if f.startswith(feature_name)]
     # drop_features = worst_features
 
 
-    results = np.zeros((len(features_names) + 1, 3))
+    results = np.zeros((len(features_names) + 1, 5))
 
     def run_without_features(without_features):
       # Split in traning and testing splits
@@ -181,21 +204,27 @@ def test_feature_removal():
       point_percent = np.sum(np.equal(predictions, evaluation_targets))/predictions.shape[0]
       precision = precision_score(evaluation_targets, predictions)
       recall = recall_score(evaluation_targets, predictions)
+
+      # Formulas from: https://tomkwok.com/posts/iou-vs-f1/
+      iou = (precision*recall) / (precision + recall - (precision*recall))
+      f1 = (2*precision*recall)/(precision+recall)
       
       res = []
       res.append(point_percent)
       res.append(precision)
       res.append(recall)
+      res.append(iou)
+      res.append(f1)
 
       return res
     
 
     for f_i, remove_feature in enumerate(tqdm(grouped_features)):
-      res = run_without_features(worst_features + remove_feature)
+      res = run_without_features(drop_features + remove_feature)
       results[f_i] = res
 
-    res = run_without_features(worst_features)
-    results[len(grouped_features)] = res
+    res = run_without_features(drop_features)
+    results[len(features_names)] = res
 
     features_names.append("Only Worst")
 
@@ -204,21 +233,28 @@ def test_feature_removal():
       print("\t\tpoint_percent:", results[i, 0])
       print("\t\tprecision    :", results[i, 1])
       print("\t\trecall       :", results[i, 2])
+      print("\t\tiou          :", results[i, 3])
+      print("\t\tF1           :", results[i, 4])
+
 
     best_point_percent_i = np.argmax(results[:,0])
     best_precision_i = np.argmax(results[:,1])
     best_recall_i = np.argmax(results[:,2])
+    best_iou_i = np.argmax(results[:,3])
+    best_f1_i = np.argmax(results[:,4])
     best_sum_i = np.argmax(np.sum(results, axis=1))
 
     print("\n\nBest to remove:")
     print("\tpoint_percent :", features_names[best_point_percent_i], "\twith", results[best_point_percent_i, 0])
     print("\tprecision     :", features_names[best_precision_i], "\twith", results[best_precision_i, 1])
     print("\trecall        :", features_names[best_recall_i], "\twith", results[best_recall_i, 2])
+    print("\tiou           :", features_names[best_iou_i], "\twith", results[best_iou_i, 3])
+    print("\tF1            :", features_names[best_f1_i], "\twith", results[best_f1_i, 4])
     print("\tsum           :", features_names[best_sum_i], "\twith", np.sum(results[best_sum_i]))
 
-    if best_recall_i != len(features_names) - 1:
-      print("\nAdding", features_names[best_recall_i], "to worst features\n\n\n")
-      worst_features.append(features_names[best_recall_i])
+    if best_iou_i != len(features_names) - 1:
+      print("\nAdding", features_names[best_iou_i], "to worst features\n\n\n")
+      worst_features.append(features_names[best_iou_i])
       print("The worst features so fare are:", worst_features)
     else:
       test_again = False

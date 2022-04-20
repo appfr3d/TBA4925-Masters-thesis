@@ -14,25 +14,25 @@ class CovarianceEigenvalue(ScalableFeature):
     covariances = np.asarray(o3d.geometry.PointCloud.estimate_point_covariances(self.state.cloud, o3d.geometry.KDTreeSearchParamRadius(scale)))
     
     # Smallest, middle and largest lists
-    smallest = np.zeros(self.state.points.shape[0])
-    middle = np.zeros(self.state.points.shape[0])
-    largest = np.zeros(self.state.points.shape[0])
+    # smallest = np.zeros(self.state.points.shape[0])
+    # middle = np.zeros(self.state.points.shape[0])
+    # largest = np.zeros(self.state.points.shape[0])
 
     # Run through every point
-    for point_i, point in enumerate(self.state.points):
+    for point_i in range(self.state.points.shape[0]):
       # Find eigenvalues of the points covariance matrix
       [eigen_values, eigen_vectors] = np.linalg.eig(covariances[point_i])
-
-      # We expect edges to have two large and one small eigen value
-      sigma = lambda eigen: eigen[0]/np.sum(eigen)
-      labels[point_i] = sigma(eigen_values)
 
       # Store smallest, middle and largest eigen values
       eigen_values_sorted = np.sort(eigen_values)
 
-      smallest[point_i] = eigen_values_sorted[0]
-      middle[point_i] = eigen_values_sorted[1]
-      largest[point_i] = eigen_values_sorted[2]
+      # We expect edges to have two large and one small eigen value
+      sigma = lambda eigen: eigen[0]/np.sum(eigen)
+      labels[point_i] = sigma(eigen_values_sorted)
+
+      # smallest[point_i] = eigen_values_sorted[0]
+      # middle[point_i] = eigen_values_sorted[1]
+      # largest[point_i] = eigen_values_sorted[2]
 
     # Post process to correct labales
     max_l = np.max(labels)

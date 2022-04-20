@@ -1,5 +1,5 @@
 import os
-
+import numpy as np
 from features.feature import FeatureState, ScalableFeatureState, SmallScalableFeatureState
 
 
@@ -48,10 +48,29 @@ def get_cloud_index():
 
   return chosen_index
 
-def test_feature_on_cloud(feature_index, cloud_file_name):
+def get_z_rotation_angle():
+  angle_names = ["0", "PI/2", "PI", "3*PI/2"]
+  angles = [0, np.pi/2, np.pi, 3*np.pi/2]
+  for angle_i, angle in enumerate(angle_names):
+    print("(" + str(angle_i) + ") " + str(angle))
+  chosen_index = int(input("> "))
+
+  while chosen_index < 0 or chosen_index >= len(angle_names):
+    print("Must be between 0 og " + str(len(angle_names) - 1))
+    chosen_index = int(input("> "))
+
+  return angles[chosen_index]
+
+def test_feature_on_cloud(feature_index, cloud_file_name, angle):
   print("Testing out", all_features[feature_index][2], "on", cloud_file_name)
   cloud = read_roof_cloud(cloud_file_name)
   cloud = normalize_cloud(cloud)
+  if angle != 0:
+    # https://en.wikipedia.org/wiki/Rotation_matrix#In_three_dimensions
+    rotation =  np.array([[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0,0,1]])
+    cloud.rotate(rotation)
+    parts = cloud_file_name.split('.')
+    cloud_file_name = parts[0] + "-" + str(round(np.rad2deg(angle))) + "." + parts[1]
   print(cloud)
 
   state = all_features[feature_index][1](cloud)
@@ -60,18 +79,20 @@ def test_feature_on_cloud(feature_index, cloud_file_name):
 
 
 # TODO: enable testing of all features and all test-files
-
 print("Which feature do you want to test?:")
 feature_index = get_feature_index()
 
 print("Which cloud file do you want to test?:")
 cloud_index = get_cloud_index()
 
+print("At which rotation do you want to test?:")
+angle = get_z_rotation_angle()
+
 if cloud_index == -1:
   for i in range(1, 6):
     cloud_file_name = "32-1-510-215-53-test-" + str(i) + ".ply"
-    test_feature_on_cloud(feature_index, cloud_file_name)
+    test_feature_on_cloud(feature_index, cloud_file_name, angle)
 
 else:
   cloud_file_name = "32-1-510-215-53-test-" + str(cloud_index) + ".ply"
-  test_feature_on_cloud(feature_index, cloud_file_name)
+  test_feature_on_cloud(feature_index, cloud_file_name, angle)
