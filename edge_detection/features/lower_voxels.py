@@ -13,7 +13,7 @@ H = 3
 K = 2*H + 1
 
 class LowerVoxels(VoxelFeature):
-  def run_at_scale(self, scale=float, visualize=True):
+  def run_at_scale(self, scale=float, knn_scale=int, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
     labels = np.zeros(self.state.points.shape[0]) # Default to not a upper_voxel

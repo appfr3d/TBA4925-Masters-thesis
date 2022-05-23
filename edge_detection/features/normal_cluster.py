@@ -1,8 +1,7 @@
 import numpy as np
 import open3d as o3d
+import tqdm
 from features.feature import ScalableFeature, ScalableFeatureState
-
-
 
 #####
 #       OBS: must normalize point clouds before saving them to use this feature!
@@ -39,10 +38,11 @@ class NormalCluster(ScalableFeature):
     c.points = self.state.cloud.points
     o3d.visualization.draw_geometries([c])
 
-  def run_at_scale(self, scale=float):
+  def run_at_scale(self, scale=float, knn_scale=int):
     normals = np.asarray(self.state.cloud.normals)
     labels = np.zeros(self.state.points.shape[0]) # Default as a non-edge
 
+    print(f'Running at scale {scale}')
     # Run through every point
     for point_i, point in enumerate(self.state.points):
       # Downscale cloud with ball query

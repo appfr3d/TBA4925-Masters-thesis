@@ -1,6 +1,6 @@
 import numpy as np
 import open3d as o3d
-from features.feature import Feature, FeatureState
+from features.feature import ScalableFeature, ScalableFeatureState
 from features.helpers import dist, mean_dist
 
 
@@ -9,13 +9,13 @@ from features.helpers import dist, mean_dist
 #####
 
 # TODO: change this to a scaled feature that changes num_neighbors
-class kNNCentroidDistance(Feature):
-  def run(self):
+class kNNCentroidDistance(ScalableFeature):
+  def run_at_scale(self, scale:float, knn_scale:int):
     labels = np.zeros(self.state.points.shape[0])
 
     # TODO: find good l and num_neighbors value, or use other technique to find them automatically
     l = 1
-    num_neighbors = 70
+    num_neighbors = knn_scale
 
     for point_i, point in enumerate(self.state.points):
       [k, idx, _] = self.state.kd_tree.search_knn_vector_3d(point, num_neighbors)
@@ -25,18 +25,32 @@ class kNNCentroidDistance(Feature):
       centroid = (1/(nearest_neighbors.shape[0])) * np.sum(nearest_neighbors, axis=0)
 
       # Get mean distance to 10 closest neighbors, then:
-      min_dist = mean_dist(point, nearest_neighbors[:10])
+      # min_dist = mean_dist(point, nearest_neighbors[:10])
 
-      labels[point_i] = dist(centroid, point) - l*min_dist
+      labels[point_i] = dist(centroid, point) # - l*min_dist
 
+
+    
+    # Post process to correct lables
+    min_l = np.min(labels)
+    max_l = np.max(labels) - min_l
+
+    # Other scaling options
+    # (1/max_l)*eigen
+    # k = 1
+    # np.arctan(k*eigen)/np.pi*0.5
+    labels = (1/max_l)*(labels-min_l)
+    
+    '''
     min_l = np.min(labels)
     labels +=  np.abs(min_l)
     max_l = np.max(labels)
 
     scale_fn = lambda val: (1/max_l)*val
     labels_scaled = scale_fn(labels)
+    '''
 
-    return labels_scaled
+    return labels
     
 
 if __name__ == "__main__":
@@ -46,7 +60,7 @@ if __name__ == "__main__":
   cloud = normalize_cloud(cloud)
   print(cloud)
 
-  state = FeatureState(cloud)
+  state = ScalableFeatureState(cloud)
   f = kNNCentroidDistance(state)
   f.run_test('knn_centroid_distance', file_name)
 

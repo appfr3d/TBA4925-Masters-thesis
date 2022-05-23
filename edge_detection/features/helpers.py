@@ -44,6 +44,9 @@ def save_scaled_feature_image(vis, cloud, labels, image_folder, scale_name):
   vis.update_renderer()
   vis.poll_events()
 
+  if not os.path.exists(image_folder):
+    os.makedirs(image_folder)
+
   img_path = os.path.join(image_folder, 'Scale' + scale_name + '.png')
   vis.capture_screen_image(img_path)
 
@@ -55,6 +58,13 @@ def mean_dist(p, pts):
   all_dist = np.array([dist(p, x) for x in pts])
   return np.mean(all_dist)
 
+def max_dist(p, pts):
+  all_dist = np.array([dist(p, x) for x in pts])
+  return np.max(all_dist)
+
+def max_mean_dist(p, pts):
+  all_dist = np.array([dist(p, x) for x in pts])
+  return np.max(all_dist), np.mean(all_dist)
 
 def plane_intersect(a, b):
   """

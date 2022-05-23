@@ -8,7 +8,7 @@ H = 2
 K = 2*H + 1
 
 class EdgeVoxels(SmallVoxelFeature):
-  def run_at_scale(self, scale=float, visualize=True):
+  def run_at_scale(self, scale:float, knn_scale:int, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
     labels = np.ones(self.state.points.shape[0])*-1 # Default to not a upper_voxel

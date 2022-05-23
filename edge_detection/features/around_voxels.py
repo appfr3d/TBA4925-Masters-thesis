@@ -17,7 +17,7 @@ Z = 2*L + 1
 outer_sides = [[0,1,2,3,4], [4,9,13,18,23], [19,20,21,22,23], [0,5,10,14,29]]
 inner_sides = [[6,7,8], [8,12,17], [15,16,17], [6,11,15]]
 class AroundVoxels(VoxelFeature):
-  def run_at_scale(self, scale=float, visualize=True):
+  def run_at_scale(self, scale:float, knn_scale:int, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
     voxels = np.asarray(all_voxels)
     labels = np.zeros(self.state.points.shape[0]) # Default to not a around_voxel

@@ -1,22 +1,24 @@
 import os
 import copy
-from xmlrpc.client import boolean
 import numpy as np
 import open3d as o3d
-from features.helpers import dist, mean_dist, read_roof_cloud, get_project_folder, save_scaled_feature_image, normalize_cloud
-
+from features.helpers import dist, mean_dist, max_mean_dist, read_roof_cloud, get_project_folder, save_scaled_feature_image
 
 NUM_SCALES = 8
+NUM_MULTI_FEATURES = 8
 VISUALIZE_VOXELS = False
 class FeatureState():
   def __init__(self, cloud: o3d.geometry.PointCloud) -> None:
     self.cloud = copy.deepcopy(cloud)
     self.kd_tree = o3d.geometry.KDTreeFlann(self.cloud)
     self.points = np.asarray(self.cloud.points)
+    self.normals = np.asarray(self.cloud.normals)
 
-    # Add normals to cloud
-    self.cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=2, max_nn=80))
-    self.cloud.orient_normals_consistent_tangent_plane(30)
+    if self.normals.shape[0] == 0:
+      # Add normals to cloud
+      self.cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.5, max_nn=80))
+      self.cloud.orient_normals_consistent_tangent_plane(30)
+      self.normals = np.asarray(self.cloud.normals)
 
     self.preprocess_whole_cloud()
 
@@ -42,13 +44,21 @@ class ScalableFeatureState(FeatureState):
     max_scale = np.max(distances) / 10 # 10% of BB diagonal
 
     self.mean_distances = np.zeros(self.points.shape[0])
+    self.max_distances = np.zeros(self.points.shape[0])
     for point_i, point in enumerate(self.points):
       [_, idx, _] = self.kd_tree.search_knn_vector_3d(point, 11) # 10 nearest neighbors, and itself
-      self.mean_distances[point_i] = mean_dist(point, self.points[idx[1:]])
+      # self.mean_distances[point_i] = mean_dist(point, self.points[idx[1:]])
+      # self.max_distances[point_i] = max_dist(point, self.points[idx[1:]])
+
+      max_d, mean_d = max_mean_dist(point, self.points[idx[1:]])
+      self.max_distances[point_i] = max_d
+      self.mean_distances[point_i] = mean_d
+
     min_scale = np.mean(self.mean_distances)
     step = (max_scale-min_scale)/NUM_SCALES
 
     self.scales = [min_scale + step*i for i in range(NUM_SCALES)]
+    self.knn_scales = np.array(list(range(1, NUM_SCALES + 1)))*10 # multiples of 10
 
 class SmallScalableFeatureState(FeatureState):
   def preprocess_whole_cloud(self):
@@ -59,6 +69,7 @@ class SmallScalableFeatureState(FeatureState):
     min_scale = np.mean(mean_distances)
     
     self.scales = [min_scale * 0.5, min_scale, min_scale * 1.5]
+    self.knn_scales = [5, 10, 15]
 
 class Feature():
   def __init__(self, state: FeatureState) -> None:
@@ -94,16 +105,30 @@ class Feature():
       # Only global scale of labels
       # Remove treshold for visualization
       save_scaled_feature_image(vis, pcd, all_labels, image_folder, "Global")
-    else:
+    elif len(all_labels.shape) == 2:
       # Several scales of labels
-      for label_i in range(all_labels.shape[0]):
+      for scale_i in range(all_labels.shape[0]):
         # Remove treshold for visualization
-        labels = all_labels[label_i]
-        save_scaled_feature_image(vis, pcd, labels, image_folder, str(label_i))
+        labels = all_labels[scale_i]
+        save_scaled_feature_image(vis, pcd, labels, image_folder, str(scale_i))
 
       # Combine scales as last labels 
       labels = np.divide(np.sum(all_labels, axis=0), all_labels.shape[0])
       save_scaled_feature_image(vis, pcd, labels, image_folder, "Combined")
+
+    elif len(all_labels.shape) == 3:
+      # Several features, with several scales of labels
+      # [scale, feature, point_index]
+      for feature_i in range(all_labels.shape[1]):
+        label_type_image_folder = os.path.join(image_folder, f"feature_{feature_i}")
+        for scale_i in range(all_labels.shape[0]):
+          # Remove treshold for visualization
+          # [scale, feature, point_index]
+          labels = all_labels[scale_i, feature_i]
+          save_scaled_feature_image(vis, pcd, labels, label_type_image_folder, str(scale_i))
+        # Combine scales as last labels 
+        labels = np.divide(np.sum(all_labels[:, feature_i], axis=0), all_labels.shape[1])
+        save_scaled_feature_image(vis, pcd, labels, label_type_image_folder, "Combined")
 
     vis.destroy_window()
     print('Done saving!')
@@ -111,24 +136,39 @@ class Feature():
 class ScalableFeature(Feature):
   def run(self, verbose=False):
     labels = np.zeros((NUM_SCALES, self.state.points.shape[0]))
-    for scale_i, scale in enumerate(self.state.scales):
+    for scale_i in range(NUM_SCALES):
       if verbose:
-        print('\t\tCalculating scale', scale_i, 'with size:', scale)
-      scale_labels = self.run_at_scale(scale)
+        print('\t\tCalculating scale', scale_i, 'with size:', self.state.scales[scale_i])
+      scale_labels = self.run_at_scale(self.state.scales[scale_i], self.state.knn_scales[scale_i])
       labels[scale_i] = scale_labels
     return labels
 
-  def run_at_scale(self, scale=float):
+  def run_at_scale(self, scale:float, knn_scale:int):
+    pass
+
+class ScalableMultiFeature(Feature):
+  def run(self, verbose=False):
+    labels = np.zeros((NUM_SCALES, NUM_MULTI_FEATURES, self.state.points.shape[0]))
+    for scale_i in range(NUM_SCALES):
+    # for scale_i, scale in enumerate(self.state.scales):
+      if verbose:
+        print('\t\tCalculating scale', scale_i, 'with size:', self.state.scales[scale_i])
+      scale_labels = self.run_at_scale(self.state.scales[scale_i], self.state.knn_scales[scale_i])
+      # [scale, feature, point_index]
+      labels[scale_i] = scale_labels
+    return labels
+
+  def run_at_scale(self, scale:float, knn_scale:int):
     pass
 
 class VoxelFeature(Feature):
   def run(self, verbose=False):
     labels = np.zeros((NUM_SCALES, self.state.points.shape[0]))
-    for scale_i, scale in enumerate(self.state.scales):
+    for scale_i in range(NUM_SCALES):
       if verbose:
-        print('\t\tCalculating scale', scale_i, 'with size:', scale)
+        print('\t\tCalculating scale', scale_i, 'with size:', self.state.scales[scale_i])
       # Generate voxels
-      self.voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(self.state.cloud, voxel_size=scale)
+      self.voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(self.state.cloud, voxel_size=self.state.scales[scale_i])
 
       # Would be to memory-intensive to hold all the voxels in all the scales in memory, so calculate them each time instead
       # Hash which points are in each grid index
@@ -141,22 +181,22 @@ class VoxelFeature(Feature):
           self.grid_index_to_point_indices[grid_index].append(point_i)
 
       # Run feature
-      scale_labels = self.run_at_scale(scale, visualize=VISUALIZE_VOXELS)
+      scale_labels = self.run_at_scale(self.state.scales[scale_i], self.state.knn_scales[scale_i], visualize=VISUALIZE_VOXELS)
       labels[scale_i] = scale_labels
     
     return labels
 
-  def run_at_scale(self, scale=float, visualize=bool):
+  def run_at_scale(self, scale:float, knn_scale:int, visualize=bool):
     pass
 
 class SmallVoxelFeature(Feature):
-  def run(self, verbose=False):
+  def run(self, verbose=True):
     labels = np.zeros((len(self.state.scales), self.state.points.shape[0]))
-    for scale_i, scale in enumerate(self.state.scales):
+    for scale_i in range(len(self.state.scales)):
       if verbose:
-        print('\t\tCalculating scale', scale_i, 'with size:', scale)
+        print('\t\tCalculating scale', scale_i, 'with size:', self.state.scales[scale_i])
       # Generate voxels
-      self.voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(self.state.cloud, voxel_size=scale)
+      self.voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(self.state.cloud, voxel_size=self.state.scales[scale_i])
 
       # Would be to memory-intensive to hold all the voxels in all the scales in memory, so calculate them each time instead
       # Hash which points are in each grid index
@@ -169,12 +209,12 @@ class SmallVoxelFeature(Feature):
           self.grid_index_to_point_indices[grid_index].append(point_i)
 
       # Run feature
-      scale_labels = self.run_at_scale(scale, visualize=VISUALIZE_VOXELS)
+      scale_labels = self.run_at_scale(self.state.scales[scale_i], self.state.knn_scales[scale_i], visualize=VISUALIZE_VOXELS)
       labels[scale_i] = scale_labels
     
     return labels
 
-  def run_at_scale(self, scale=float, visualize=bool):
+  def run_at_scale(self, scale:float, knn_scale:int, visualize=bool):
     pass
 
 

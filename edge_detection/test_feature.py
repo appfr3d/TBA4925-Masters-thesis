@@ -2,7 +2,6 @@ import os
 import numpy as np
 from features.feature import FeatureState, ScalableFeatureState, SmallScalableFeatureState
 
-
 from features.lower_voxels import LowerVoxels
 from features.upper_voxels import UpperVoxels
 from features.edge_voxels import EdgeVoxels
@@ -14,7 +13,7 @@ from features.covariance_eigenvalue import CovarianceEigenvalue
 
 from features.helpers import read_roof_cloud, normalize_cloud
 
-all_features = [(kNNCentroidDistance, FeatureState, "knn_centroid_distance"), 
+all_features = [(kNNCentroidDistance, ScalableFeatureState, "knn_centroid_distance"), 
                 (LowerVoxels, ScalableFeatureState, "lower_voxels"), 
                 (UpperVoxels, ScalableFeatureState, "upper_voxels"), 
                 (AroundVoxels, ScalableFeatureState, "around_voxels"), 
@@ -37,7 +36,7 @@ def get_feature_index():
 
 
 def get_cloud_index():
-  for i in range(1, 6):
+  for i in range(1, 7):
     print("(" + str(i) + ")")
   print("(-1) All clouds")
   chosen_index = int(input("> "))
@@ -85,11 +84,11 @@ feature_index = get_feature_index()
 print("Which cloud file do you want to test?:")
 cloud_index = get_cloud_index()
 
-print("At which rotation do you want to test?:")
-angle = get_z_rotation_angle()
+# print("At which rotation do you want to test?:")
+angle = 0 # get_z_rotation_angle()
 
 if cloud_index == -1:
-  for i in range(1, 6):
+  for i in range(1, 7):
     cloud_file_name = "32-1-510-215-53-test-" + str(i) + ".ply"
     test_feature_on_cloud(feature_index, cloud_file_name, angle)
 

@@ -14,8 +14,13 @@ def get_dataset_path(file_name):
   project_folder = os.path.dirname(current_folder)
   return os.path.join(project_folder, "data/point_clouds/classified_roofs/calculated_values", file_name)
 
-training_data_file_names = ["32-1-510-215-53-test-1.csv", "32-1-510-215-53-test-2.csv", "32-1-510-215-53-test-3.csv"] 
-evaluation_data_file_names = ["32-1-510-215-53-test-4.csv", "32-1-510-215-53-test-5.csv"]
+training_data_file_names = ["32-1-510-215-53-test-1.csv", "32-1-510-215-53-test-2.csv", "32-1-510-215-53-test-3.csv", 
+                            "32-1-510-215-53-test-4.csv", "32-1-510-215-53-test-5.csv", "32-1-510-215-53-test-6.csv",
+                            "32-1-510-215-53-test-9.csv", "32-1-510-215-53-test-12.csv", "32-1-510-215-53-test-14.csv",
+                            "32-1-510-215-53-test-10.csv", "32-1-510-215-53-test-large-1.csv"]
+
+evaluation_data_file_names = ["32-1-510-215-53-test-11.csv", "32-1-510-215-53-test-8.csv",
+                              "32-1-510-215-53-test-13.csv", "32-1-510-215-53-test-7.csv"]
 
 def calculate_weight(targets):
   one_targets = sum([1 if x == 1 else 0 for x in targets])
@@ -37,8 +42,26 @@ def run_classification():
 
   # removing "kNNCentroidDistance" gives better metric results, but not visually better results...
   # "kNNCentroidDistance", "NormalCluster", "EdgeVoxels", "AroundVoxels", "UpperVoxels", "LowerVoxels"
-  remove_group_features = ["kNNCentroidDistance", "EdgeVoxels"]
-  remove_single_features = []
+  remove_group_features = ["LowerVoxels"]
+  remove_single_features = [] #"x", "z"]
+
+  ''' 
+  Whitout covariance_eigenvalue scaling
+  Evaluation:
+	Point perecentage: 0.9130725509862923
+	Precision        : 0.9608472400513479
+	Recall           : 0.9279274202637214
+	iou              : 0.8941195634468154
+	F1               : 0.9441004471964224
+
+  With covariance_eigenvalue scaling
+  Evaluation:
+	Point perecentage: 0.9089044912515324
+	Precision        : 0.9743527776938646
+	Recall           : 0.9087681731094331
+	iou              : 0.8875374920888254
+	F1               : 0.9404183978424084
+  '''
 
   remove_features = []
 
@@ -55,16 +78,23 @@ def run_classification():
   targets = training_data["target"]
 
 
+  # Testing with categorical features made it perform worse
+  # categorical_features = [f"LowerVoxels_{i}" for i in range(8)] + [f"UpperVoxels_{i}" for i in range(8)]# [f"AroundVoxels_{i}" for i in range(8)]
+  # actual_cat_features = []
+  # for cat in categorical_features:
+  #   if not cat in remove_features:
+  #     # actual_cat_features.append(cat)
+  #     # features[cat] = features[cat].apply(int)
+  #     print(features[cat].dtype)
+
   # Split in traning and testing splits
   X_train, X_validation, y_train, y_validation = train_test_split(features, targets, train_size=0.8, random_state=1234)
 
   # Weight the edge /non-edge classes
   target_weight = calculate_weight(y_train)
 
-  # TODO: test with categorical?
-  # categorical_features = []
-
   train_pool = Pool(
+    # cat_features=actual_cat_features,
     data=X_train,
     label=y_train,
     weight=target_weight,
@@ -72,9 +102,11 @@ def run_classification():
 
   model = CatBoostClassifier(
     iterations=500,
+    ## early_stopping_rounds=100,
     learning_rate=0.1,
     random_seed=42,
-    logging_level="Silent"
+    use_best_model=True,
+    logging_level="Silent",
   )
 
   model.fit(train_pool, eval_set=(X_validation, y_validation), verbose=True)
@@ -85,6 +117,7 @@ def run_classification():
   feature_importance = pd.DataFrame({"feature": feature_list, "importance": feature_importance_list})
   feature_importance.sort_values(by=["importance"], ascending=[False], inplace=True)
   print("\nFeature importance:")
+  pd.set_option('display.max_rows', 107)
   print(feature_importance)
 
   evaluation_data = pd.DataFrame()
@@ -94,6 +127,9 @@ def run_classification():
 
   evaluation_features = evaluation_data.drop(["target"] + remove_features, axis=1)
   evaluation_targets = evaluation_data["target"].to_numpy()
+
+  # for cat in actual_cat_features:
+  #   evaluation_features[cat] = evaluation_features[cat].apply(int)
 
   predictions = model.predict(evaluation_features)
 
@@ -123,7 +159,10 @@ def run_classification():
   # Visualize result
   for file_name in evaluation_data_file_names:
     visualization_data = pd.read_csv(get_dataset_path(file_name), index_col=0)
-    visualization_features = visualization_data.drop("target", axis=1)
+    visualization_features = visualization_data.drop(["target"] + remove_features, axis=1)
+
+    # for cat in actual_cat_features:
+    #   visualization_features[cat] = visualization_features[cat].apply(int)
 
     predictions = model.predict(visualization_features)
     pcd = o3d.geometry.PointCloud()
@@ -132,6 +171,10 @@ def run_classification():
 
     colors = np.zeros((predictions.shape[0], 3))
     colors += [0.6, 0.6, 0.6]
+
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+    # o3d.visualization.draw_geometries([pcd])
+
     colors[predictions < 0.5] = [0, 1, 0] # Color positive values as green
 
     pcd.colors = o3d.utility.Vector3dVector(colors)
@@ -139,7 +182,7 @@ def run_classification():
 
 
 def test_feature_removal():
-  worst_features = []
+  worst_features = [] #"z", "x", "EdgeVoxels"]
   test_again = True
 
   while test_again:
@@ -153,8 +196,10 @@ def test_feature_removal():
     feature_list = all_features.columns.tolist()
 
     # features_names = feature_list
-    features_names = ["x", "y", "z", "kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", 
-                      "NormalCluster", "CovarianceEigenvalue", "EdgeVoxels"]
+    features_names = ["x", "y", "z", "10", "kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", 
+                       "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1", "CovarianceEigenvalue_feature_2", 
+                       "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
+                       "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", ] #, "EdgeVoxels"] # "NormalCluster",
     features_names = [f for f in features_names if f not in worst_features]
 
     # Remove every NormalCluster
@@ -183,7 +228,7 @@ def test_feature_removal():
       )
 
       model = CatBoostClassifier(
-        iterations=500,
+        iterations=100,
         learning_rate=0.1,
         random_seed=42,
         logging_level="Silent"
@@ -261,9 +306,24 @@ def test_feature_removal():
 
   print("The worst features which should be removed are:", worst_features)
 
+def class_imbalance():
+  training_data = pd.DataFrame()
+  for file_name in training_data_file_names:
+    data = pd.read_csv(get_dataset_path(file_name), index_col=0)
+    training_data = pd.concat([training_data, data])
+
+  targets = training_data["target"]
+  # Weight the edge /non-edge classes
+  one_targets = sum([1 if x == 1 else 0 for x in targets])
+  zero_targets = sum([1 if x == 0 else 0 for x in targets])
+  one_weight = zero_targets/(one_targets+zero_targets)
+  zero_weight = one_targets/(one_targets+zero_targets)
+  print(f"one_weight: {one_weight}\nzero_weight: {zero_weight}")
+
 def main():
   # test_feature_removal()
   run_classification()
+  # class_imbalance()
 
   # Removing whole  features by sum     : best to remove kNNCentroidDistance and y
   # Removing single features by sum     : best to remove kNNCentroidDistance and LowerVoxels_2

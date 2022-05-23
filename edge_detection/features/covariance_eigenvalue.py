@@ -1,6 +1,7 @@
 import numpy as np
+import math
 import open3d as o3d
-from features.feature import ScalableFeature, ScalableFeatureState
+from features.feature import ScalableMultiFeature, ScalableFeatureState
 from matplotlib import pyplot as plt
 
 
@@ -8,15 +9,20 @@ from matplotlib import pyplot as plt
 #       OBS: must normalize point clouds before saving them to use this feature!
 #             or else we will loose a lot of precision...
 #####
-class CovarianceEigenvalue(ScalableFeature):
-  def run_at_scale(self, scale: float):
-    labels = np.zeros(self.state.points.shape[0])
+class CovarianceEigenvalue(ScalableMultiFeature):
+  def run_at_scale(self, scale: float, knn_scale: int):
+    labels = np.zeros((8, self.state.points.shape[0]))
     covariances = np.asarray(o3d.geometry.PointCloud.estimate_point_covariances(self.state.cloud, o3d.geometry.KDTreeSearchParamRadius(scale)))
     
-    # Smallest, middle and largest lists
-    # smallest = np.zeros(self.state.points.shape[0])
-    # middle = np.zeros(self.state.points.shape[0])
-    # largest = np.zeros(self.state.points.shape[0])
+    # Implementing functions for the 8 features proposed by Weinmann et. al.
+    eigen_sum = lambda eigen: np.sum(eigen)
+    omnivariance = lambda eigen: np.cbrt(np.prod(eigen))
+    eigenentropy = lambda eigen: -np.sum(eigen*np.log2(np.abs(eigen)))
+    anisotropy = lambda eigen: (eigen[2] - eigen[0]) / eigen[2]
+    planarity = lambda eigen: (eigen[1] - eigen[0]) / eigen[2]
+    linearity = lambda eigen: (eigen[2] - eigen[1]) / eigen[2]
+    surface_variation = lambda eigen: eigen[0]/np.sum(eigen)
+    sphericity = lambda eigen: eigen[0]/eigen[2]
 
     # Run through every point
     for point_i in range(self.state.points.shape[0]):
@@ -25,43 +31,21 @@ class CovarianceEigenvalue(ScalableFeature):
 
       # Store smallest, middle and largest eigen values
       eigen_values_sorted = np.sort(eigen_values)
+      if eigen_values_sorted[0] == 0:
+        eigen_values_sorted[0] += 1.0e-20
 
-      # We expect edges to have two large and one small eigen value
-      sigma = lambda eigen: eigen[0]/np.sum(eigen)
-      labels[point_i] = sigma(eigen_values_sorted)
+      # Run and store all functions
+      # [scale, feature, point_index]
+      labels[0, point_i] = eigen_sum(eigen_values_sorted)
+      labels[1, point_i] = omnivariance(eigen_values_sorted)
+      labels[2, point_i] = eigenentropy(eigen_values_sorted)
+      labels[3, point_i] = anisotropy(eigen_values_sorted)
+      labels[4, point_i] = planarity(eigen_values_sorted)
+      labels[5, point_i] = linearity(eigen_values_sorted)
+      labels[6, point_i] = surface_variation(eigen_values_sorted)
+      labels[7, point_i] = sphericity(eigen_values_sorted)
 
-      # smallest[point_i] = eigen_values_sorted[0]
-      # middle[point_i] = eigen_values_sorted[1]
-      # largest[point_i] = eigen_values_sorted[2]
-
-    # Post process to correct labales
-    max_l = np.max(labels)
-
-    # Other scaling options
-    # (1/max_l)*eigen
-    # k = 1
-    # np.arctan(k*eigen)/np.pi*0.5
-    scale_fn = lambda eigen: (1/max_l)*eigen
-    labels_scaled = scale_fn(labels)
-
-    # Calculate threshold
-    # labels_sorted = np.sort(labels_scaled)
-    # largest_gap = [0, 0] # value, index
-    # for i in range(labels_sorted.shape[0] - 1):
-    #   gap = labels_sorted[i+1] - labels_sorted[i]
-
-    #   # There can be noise in the dataset, so only look at the 95% first
-    #   if gap > largest_gap[0] and i < labels_sorted.shape[0]*0.95:
-    #     largest_gap = [gap, i]
-
-    # # Threshold in the middle of the largest gap
-    # self.thresholds[self.state.scales.index(scale)] = labels_sorted[largest_gap[1]] + largest_gap[0]*0.5
-    # threshold = labels_sorted[largest_gap[1]] + largest_gap[0]*0.5
-    # print('treshold', threshold)
-
-    # labels_real = labels_scaled - threshold
-
-    return labels_scaled
+    return labels
 
 if __name__ == "__main__":
   from helpers import read_roof_cloud, normalize_cloud

@@ -94,7 +94,7 @@ def main():
     
     print(len(found_edge_points.keys()), "/", edges.shape[0])
     # Go through each line model
-      # count each od the points close to the line up one
+      # count each of the points close to the line up one
     
     # Give colors to the points that have more than one line on them
 
