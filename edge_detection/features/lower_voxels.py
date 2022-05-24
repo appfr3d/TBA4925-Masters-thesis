@@ -1,7 +1,7 @@
 import numpy as np
 import open3d as o3d
 from features.feature import VoxelFeature, ScalableFeatureState
-
+import copy
 
 # OBS: voxel.grid_index !== voxel_grid.get_voxel_center_coordinate(voxel.grid_index)
 
@@ -30,11 +30,18 @@ class LowerVoxels(VoxelFeature):
       below_query = o3d.utility.Vector3dVector(below_neighbors)
 
       # Visualize below_query
-      # pcd = o3d.geometry.PointCloud()
-      # pcd.points = o3d.utility.Vector3dVector(below_query)
-      # pcd.paint_uniform_color([1,0,0])
-      # o3d.visualization.draw([self.voxel_grid, pcd])
-
+      # q_pcd = o3d.geometry.PointCloud()
+      # q_pcd.points = o3d.utility.Vector3dVector(below_query)
+      # q_pcd.paint_uniform_color([1,0,0])
+      # c_pcd = o3d.geometry.PointCloud()
+      # c_pcd.points = o3d.utility.Vector3dVector(self.state.points)
+      # c_colors = copy.deepcopy(np.asarray(self.state.cloud.colors))
+      # point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
+      # c_colors[point_indices] = [0, 1, 0]
+      # c_pcd.colors = o3d.utility.Vector3dVector(c_colors)
+      # new_voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(c_pcd, voxel_size=scale)
+      # o3d.visualization.draw_geometries([new_voxels, q_pcd], width=1024, height=1024)
+      
       below_included = self.voxel_grid.check_if_included(below_query)
 
       # If they are a upper_voxel, store it in the labels

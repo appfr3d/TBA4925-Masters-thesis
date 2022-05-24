@@ -2,10 +2,10 @@ import os
 import copy
 import numpy as np
 import open3d as o3d
-from features.helpers import dist, mean_dist, max_mean_dist, read_roof_cloud, get_project_folder, save_scaled_feature_image
+from features.helpers import dist, mean_dist, max_mean_dist, read_roof_cloud, get_project_folder, save_scaled_feature_image, remove_noise
 
 NUM_SCALES = 8
-NUM_MULTI_FEATURES = 8
+NUM_MULTI_FEATURES = 11
 VISUALIZE_VOXELS = False
 class FeatureState():
   def __init__(self, cloud: o3d.geometry.PointCloud) -> None:

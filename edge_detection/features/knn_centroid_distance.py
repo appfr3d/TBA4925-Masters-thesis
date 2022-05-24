@@ -8,7 +8,11 @@ from features.helpers import dist, mean_dist
 #       OBS: must normalize point clouds before saving them to use this feature!
 #####
 
-# TODO: change this to a scaled feature that changes num_neighbors
+
+
+# TODO: Make this feature scale invariant by including the actual downscaling factor.
+# Right now the distance between each point changes between small and large point clouds, 
+# as large normalized clouds are denser than small normalized clouds.
 class kNNCentroidDistance(ScalableFeature):
   def run_at_scale(self, scale:float, knn_scale:int):
     labels = np.zeros(self.state.points.shape[0])
@@ -40,7 +44,7 @@ class kNNCentroidDistance(ScalableFeature):
     # k = 1
     # np.arctan(k*eigen)/np.pi*0.5
     labels = (1/max_l)*(labels-min_l)
-    
+
     '''
     min_l = np.min(labels)
     labels +=  np.abs(min_l)

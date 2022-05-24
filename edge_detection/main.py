@@ -27,7 +27,7 @@ from features.knn_centroid_distance import kNNCentroidDistance
 from features.normal_cluster import NormalCluster
 from features.covariance_eigenvalue import CovarianceEigenvalue
 
-from features.helpers import get_roof_folder, read_roof_cloud, normalize_cloud, get_project_folder
+from features.helpers import get_roof_folder, read_roof_cloud, normalize_cloud, get_project_folder, remove_noise
 
 all_features = [(kNNCentroidDistance, ScalableFeatureState, "knn_centroid_distance"), 
                 (LowerVoxels, ScalableFeatureState, "lower_voxels"), 
@@ -142,6 +142,7 @@ def calculate_features():
     print("Calculating features for file:", file_name)
     cloud = read_roof_cloud(file_name)
     cloud = normalize_cloud(cloud)
+    cloud = remove_noise(cloud)
     points = np.asarray(cloud.points)
     print(f"File contains {points.shape[0]} points.")
 
@@ -434,6 +435,7 @@ def test_feature():
     print("Testing out", all_features[feature_index][2], "on", cloud_file_name)
     cloud = read_roof_cloud(cloud_file_name)
     cloud = normalize_cloud(cloud)
+    cloud = remove_noise(cloud)
     state = all_features[feature_index][1](cloud)
     f = all_features[feature_index][0](state)
     f.run_test(all_features[feature_index][2], cloud_file_name)

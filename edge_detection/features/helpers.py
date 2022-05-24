@@ -1,3 +1,4 @@
+from cProfile import label
 import os
 from matplotlib import cm
 from matplotlib.colors import LinearSegmentedColormap
@@ -29,6 +30,58 @@ def normalize_cloud(cloud):
 
   cloud.points = o3d.utility.Vector3dVector(points)
   return cloud
+
+def remove_noise(cloud):
+  # Average dist to 10NN
+  kd_tree = o3d.geometry.KDTreeFlann(cloud)
+  points = np.asarray(cloud.points)
+  mean_distances = np.zeros(points.shape[0])
+  for point_i, point in enumerate(points):
+    [_, idx, _] = kd_tree.search_knn_vector_3d(point, 11) # 10 nearest neighbors, and itself
+    mean_d = mean_dist(point, points[idx[1:]])
+    mean_distances[point_i] = mean_d
+
+  min_scale = np.mean(mean_distances)
+  labels = np.array(cloud.cluster_dbscan(eps=min_scale*2, min_points=12))
+  clusters = np.unique(labels)
+  
+  # Visualize dbscan
+  # color_labels = np.divide(labels + 1, clusters.shape[0] - 1)
+  # test_cloud = o3d.geometry.PointCloud()
+  # test_cloud.points = o3d.utility.Vector3dVector(points)
+  # colormap = cm.get_cmap('rainbow') 
+  # test_colors = np.array([colormap(l) for l in color_labels])
+  # test_cloud.colors = o3d.utility.Vector3dVector(test_colors[:, :3])
+  # o3d.visualization.draw_geometries([test_cloud], width=1024, height=1024)
+
+  # Remove noisy clusters such as chimneys
+  # E.i. every cluster with less than 100 points
+  for cluster in clusters:
+    if cluster >= 0:
+      points_in_cluster = labels[labels == cluster]
+      if points_in_cluster.shape[0] < 100:
+        labels[labels == cluster] = -1
+
+  # Visualize small cluster removal
+  # roof_points = points[labels >= 0]
+  # noise_points = points[labels < 0]
+  # roof_cloud = o3d.geometry.PointCloud()
+  # roof_cloud.points = o3d.utility.Vector3dVector(roof_points)
+  # roof_cloud.colors = o3d.utility.Vector3dVector(np.zeros((roof_points.shape[0], 3)) + [0, 1, 0])
+  # noise_cloud = o3d.geometry.PointCloud()
+  # noise_cloud.points = o3d.utility.Vector3dVector(noise_points)
+  # noise_cloud.colors = o3d.utility.Vector3dVector(np.zeros((noise_points.shape[0], 3)) + [1, 0, 0])
+  # o3d.visualization.draw_geometries([roof_cloud, noise_cloud], width=1024, height=1024)
+
+  # Final cloud
+  final_cloud = o3d.geometry.PointCloud()
+  final_cloud.points = o3d.utility.Vector3dVector(points[labels >= 0])
+  final_cloud.colors = o3d.utility.Vector3dVector(np.asarray(cloud.colors)[labels >= 0])
+  if cloud.has_normals():
+    final_cloud.normals = o3d.utility.Vector3dVector(np.asarray(cloud.normals)[labels >= 0])
+
+  return final_cloud
+
 
 def write_roof_cloud_result(file_name, cloud):
   project_folder = get_project_folder()

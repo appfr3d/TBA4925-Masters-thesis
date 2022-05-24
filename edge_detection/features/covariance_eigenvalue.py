@@ -36,14 +36,17 @@ class CovarianceEigenvalue(ScalableMultiFeature):
 
       # Run and store all functions
       # [scale, feature, point_index]
-      labels[0, point_i] = eigen_sum(eigen_values_sorted)
-      labels[1, point_i] = omnivariance(eigen_values_sorted)
-      labels[2, point_i] = eigenentropy(eigen_values_sorted)
-      labels[3, point_i] = anisotropy(eigen_values_sorted)
-      labels[4, point_i] = planarity(eigen_values_sorted)
-      labels[5, point_i] = linearity(eigen_values_sorted)
-      labels[6, point_i] = surface_variation(eigen_values_sorted)
-      labels[7, point_i] = sphericity(eigen_values_sorted)
+      labels[0, point_i] = eigen_values_sorted[0]
+      labels[1, point_i] = eigen_values_sorted[1]
+      labels[2, point_i] = eigen_values_sorted[2]
+      labels[3, point_i] = eigen_sum(eigen_values_sorted)
+      labels[4, point_i] = omnivariance(eigen_values_sorted)
+      labels[5, point_i] = eigenentropy(eigen_values_sorted)
+      labels[6, point_i] = anisotropy(eigen_values_sorted)
+      labels[7, point_i] = planarity(eigen_values_sorted)
+      labels[8, point_i] = linearity(eigen_values_sorted)
+      labels[9, point_i] = surface_variation(eigen_values_sorted)
+      labels[10, point_i] = sphericity(eigen_values_sorted)
 
     return labels
 
