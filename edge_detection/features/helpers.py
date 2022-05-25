@@ -26,10 +26,11 @@ def normalize_cloud(cloud):
   center = cloud.get_center()
   points -= center
   all_dist = np.array([dist([0,0,0], x) for x in points])
-  points /= np.max(all_dist)
+  max_dist = np.max(all_dist)
+  points /= max_dist
 
   cloud.points = o3d.utility.Vector3dVector(points)
-  return cloud
+  return cloud, max_dist
 
 def remove_noise(cloud):
   # Average dist to 10NN

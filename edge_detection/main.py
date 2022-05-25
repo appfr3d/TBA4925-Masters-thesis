@@ -141,7 +141,7 @@ def calculate_features():
   for file_name in test_file_names:
     print("Calculating features for file:", file_name)
     cloud = read_roof_cloud(file_name)
-    cloud = normalize_cloud(cloud)
+    cloud, downsampling_factor = normalize_cloud(cloud)
     cloud = remove_noise(cloud)
     points = np.asarray(cloud.points)
     print(f"File contains {points.shape[0]} points.")
@@ -160,9 +160,9 @@ def calculate_features():
     labels_df["z_abs"] = np.abs(points[:, 2])
 
     # Add the mean distance to the points 10 nearest neighbors
-    SFS = ScalableFeatureState(cloud)
-    labels_df["10_knn_mean_dist"] = SFS.mean_distances
-    labels_df["10_knn_max_dist"] = SFS.max_distances
+    SFS = ScalableFeatureState(cloud, downsampling_factor)
+    labels_df["10_knn_mean_dist"] = SFS.mean_distances * downsampling_factor
+    labels_df["10_knn_max_dist"] = SFS.max_distances * downsampling_factor
 
     big_tic = time.perf_counter()
 
@@ -434,9 +434,9 @@ def test_feature():
   def test_feature_on_cloud(feature_index, cloud_file_name):
     print("Testing out", all_features[feature_index][2], "on", cloud_file_name)
     cloud = read_roof_cloud(cloud_file_name)
-    cloud = normalize_cloud(cloud)
+    cloud, downsampling_factor = normalize_cloud(cloud)
     cloud = remove_noise(cloud)
-    state = all_features[feature_index][1](cloud)
+    state = all_features[feature_index][1](cloud, downsampling_factor)
     f = all_features[feature_index][0](state)
     f.run_test(all_features[feature_index][2], cloud_file_name)
 

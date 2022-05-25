@@ -17,8 +17,6 @@ class kNNCentroidDistance(ScalableFeature):
   def run_at_scale(self, scale:float, knn_scale:int):
     labels = np.zeros(self.state.points.shape[0])
 
-    # TODO: find good l and num_neighbors value, or use other technique to find them automatically
-    l = 1
     num_neighbors = knn_scale
 
     for point_i, point in enumerate(self.state.points):
@@ -28,22 +26,19 @@ class kNNCentroidDistance(ScalableFeature):
 
       centroid = (1/(nearest_neighbors.shape[0])) * np.sum(nearest_neighbors, axis=0)
 
-      # Get mean distance to 10 closest neighbors, then:
-      # min_dist = mean_dist(point, nearest_neighbors[:10])
-
-      labels[point_i] = dist(centroid, point) # - l*min_dist
+      labels[point_i] = dist(centroid, point)
 
 
-    
+    labels *= self.state.downsampling_factor
     # Post process to correct lables
-    min_l = np.min(labels)
-    max_l = np.max(labels) - min_l
+    # min_l = np.min(labels)
+    # max_l = np.max(labels) - min_l
 
     # Other scaling options
     # (1/max_l)*eigen
     # k = 1
     # np.arctan(k*eigen)/np.pi*0.5
-    labels = (1/max_l)*(labels-min_l)
+    # labels = (1/max_l)*(labels-min_l)
 
     '''
     min_l = np.min(labels)

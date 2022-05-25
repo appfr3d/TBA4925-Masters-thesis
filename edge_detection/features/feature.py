@@ -8,11 +8,12 @@ NUM_SCALES = 8
 NUM_MULTI_FEATURES = 11
 VISUALIZE_VOXELS = False
 class FeatureState():
-  def __init__(self, cloud: o3d.geometry.PointCloud) -> None:
+  def __init__(self, cloud: o3d.geometry.PointCloud, downsampling_factor=1) -> None:
     self.cloud = copy.deepcopy(cloud)
     self.kd_tree = o3d.geometry.KDTreeFlann(self.cloud)
     self.points = np.asarray(self.cloud.points)
     self.normals = np.asarray(self.cloud.normals)
+    self.downsampling_factor = downsampling_factor 
 
     if self.normals.shape[0] == 0:
       # Add normals to cloud
