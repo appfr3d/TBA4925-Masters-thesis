@@ -34,14 +34,15 @@ class EdgeVoxels(SmallVoxelFeature):
 
     max_idx = max_idx + K # Padding
 
+    # Create occupancy grid (binary)
     occupancy_grid = np.zeros(max_idx, dtype=np.float32)
 
     for voxel_i in range(voxels.shape[0]):
       grid_index = tuple(voxels[voxel_i].grid_index)
-      # Add occupied voxels
+      # Add occupied voxels as 1
       occupancy_grid[grid_index] = 1.0
 
-    # Presmooth occupancy_grid
+    # Presmooth occupancy_grid so it is not binary anymore
     occupancy_grid = gaussian_filter(occupancy_grid, sigma=1)
 
     # Store exponent * presmoothed occupancy_grid in voxels_with_neighbors
@@ -61,16 +62,20 @@ class EdgeVoxels(SmallVoxelFeature):
               # Normalized coordinates
               [Xp, Yp, Zp] = voxel_center + [x*scale, y*scale, z*scale]
               
+              # Derivate parts
               x_part = np.power(Xp, 2) / np.power(H/2, 2)
               y_part = np.power(Yp, 2) / np.power(H/2, 2)
               z_part = np.power(Zp, 2) / np.power(H/2, 2)
 
+              # Exponent is the derivate
               exponent = np.exp(-(x_part + y_part + z_part))
               voxels_with_neighbors[neighbor_grid_index] = exponent * occupancy_grid[neighbor_grid_index]
+
 
     for voxel_i in range(voxels.shape[0]):
       grid_index = tuple(voxels[voxel_i].grid_index)
 
+      # Create I values for the structure tensor
       I_neighborhood = np.zeros((K, K, K, 6))
       for x in range(-H, H+1):
         for y in range(-H, H+1):
@@ -91,21 +96,21 @@ class EdgeVoxels(SmallVoxelFeature):
       # Stored as [Axx, Ayy, Azz, Axy, Axz, Ayz]
       structure_tensor_values = np.zeros(6)
       for i in range(6):
+        # Smooth out values
         g = gaussian_filter(I_neighborhood[:,:,:,i], sigma=1)
         structure_tensor_values[i] = g[H, H, H]
 
+      # Create structure tensor
       structure_tensor = np.array([
         [structure_tensor_values[0], structure_tensor_values[3], structure_tensor_values[4]], 
         [structure_tensor_values[3], structure_tensor_values[1], structure_tensor_values[5]], 
         [structure_tensor_values[4], structure_tensor_values[5], structure_tensor_values[2]]])
 
+      # Calculate eigen values
       [eigen_values, eigen_vectors] = np.linalg.eig(structure_tensor)
 
-      # Store smallest, middle and largest eigen values
+      # Store smallest, middle and largest eigen values and store them
       eigen_values_sorted = np.sort(eigen_values)
-
-      # print('eigen_values_sorted', eigen_values_sorted)
-
       smallest[voxel_i] = eigen_values_sorted[0]
       middle[voxel_i] = eigen_values_sorted[1]
       largest[voxel_i] = eigen_values_sorted[2]
@@ -113,11 +118,6 @@ class EdgeVoxels(SmallVoxelFeature):
       point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
       # print("condition value:", smallest[voxel_i] / middle[voxel_i])
       labels[point_indices] = smallest[voxel_i] / middle[voxel_i]
-
-    # Post process to correct labales
-    max_l = np.max(labels)
-    scale_fn = lambda val: (1/max_l)*val
-    labels_scaled = scale_fn(labels)
 
     # Visualize colored voxels
     if visualize:
@@ -148,7 +148,7 @@ class EdgeVoxels(SmallVoxelFeature):
       
       plt.show()
 
-    return labels_scaled 
+    return labels
 
 
 if __name__ == "__main__":

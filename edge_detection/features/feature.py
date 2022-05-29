@@ -114,7 +114,8 @@ class Feature():
         save_scaled_feature_image(vis, pcd, labels, image_folder, str(scale_i))
 
       # Combine scales as last labels 
-      labels = np.divide(np.sum(all_labels, axis=0), all_labels.shape[0])
+      labels = np.mean(all_labels)
+      # np.divide(np.sum(all_labels, axis=0), all_labels.shape[0])
       save_scaled_feature_image(vis, pcd, labels, image_folder, "Combined")
 
     elif len(all_labels.shape) == 3:
@@ -127,9 +128,9 @@ class Feature():
           # [scale, feature, point_index]
           labels = all_labels[scale_i, feature_i]
           save_scaled_feature_image(vis, pcd, labels, label_type_image_folder, str(scale_i))
-        # Combine scales as last labels 
-        labels = np.divide(np.sum(all_labels[:, feature_i], axis=0), all_labels.shape[1])
-        save_scaled_feature_image(vis, pcd, labels, label_type_image_folder, "Combined")
+        # Combine scales as last labels
+        save_scaled_feature_image(vis, pcd, np.mean(all_labels[:, feature_i], axis=0), label_type_image_folder, "Combined")
+
 
     vis.destroy_window()
     print('Done saving!')

@@ -33,9 +33,13 @@ print("done!")
 # print(omrade.head())
 
 
-building_zero = omrade[omrade.index == 0]
+large_buildings = omrade[omrade.SHAPE_Area > 30]
+large_buildings.info()
+print(large_buildings.head())
 
-building_zero["geometry"].plot()
+# building_zero = omrade[omrade.index == 0]
+
+# building_zero["geometry"].plot()
 
 
 
@@ -45,7 +49,7 @@ building_zero["geometry"].plot()
 # omrade.plot(column="bygningsnummer")
 # print("done!")
 
-plt.show()
+# plt.show()
 
 
 # Crop point cloud:

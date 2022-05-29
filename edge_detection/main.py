@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import open3d as o3d
+from torch import threshold
 import trimesh
 import time
 import multiprocessing as mp
@@ -56,7 +57,7 @@ evaluation_data_file_names = ["32-1-510-215-53-test-10.csv", "32-1-510-215-53-te
 
 def get_main_menu_choice():
   print("\n\nMain Menu:")
-  choices = ["Calculate features", "Classify points", "Calculate and classify", "Test feature removal", "Test feature", "Plot feature figure"]
+  choices = ["Calculate features", "Classify points", "Calculate and classify", "Test feature removal", "Test feature", "Plot feature figure", "Calculate feature performance"]
   for choice_i, choice in enumerate(choices):
     print("(" + str(choice_i) + ") " + str(choice))
   print("(-1) Quit")
@@ -99,7 +100,6 @@ def calculate_with_multiprocess(feature_class, feature_state_class, points):
   feature = feature_class(feature_state_class(pcd))
   return calculate_feature_values(feature)
 
-
 def calculate_features():
   def store_labels(all_labels, labels_df, name: str):
     if len(all_labels.shape) == 1:
@@ -113,7 +113,8 @@ def calculate_features():
         labels_df[scale_name] = labels
       
       # Store mean of all scales as a label as well
-      mean_labels = np.divide(np.sum(all_labels, axis=0), all_labels.shape[0])
+      mean_labels = np.mean(all_labels, axis=0)
+      # np.divide(np.sum(all_labels, axis=0), all_labels.shape[0])
       labels_df[name + "_mean"] = mean_labels
 
     elif len(all_labels.shape) == 3:
@@ -128,7 +129,8 @@ def calculate_features():
           feature_i_df[scale_name] = labels
         
         # Store mean of all scales as a label as well
-        mean_labels = np.divide(np.sum(all_labels[scale_i], axis=0), all_labels.shape[1])
+        mean_labels = np.mean(all_labels[:, feature_i], axis=0)
+        # np.divide(np.sum(all_labels[scale_i], axis=0), all_labels.shape[1])
         mean_name = f"{name}_feature_{feature_i}_mean"
         # labels_df[mean_name] = mean_labels
         mean_df = pd.DataFrame({ mean_name: mean_labels })
@@ -142,7 +144,7 @@ def calculate_features():
     print("Calculating features for file:", file_name)
     cloud = read_roof_cloud(file_name)
     cloud, downsampling_factor = normalize_cloud(cloud)
-    cloud = remove_noise(cloud)
+    cloud, indices = remove_noise(cloud)
     points = np.asarray(cloud.points)
     print(f"File contains {points.shape[0]} points.")
 
@@ -150,7 +152,7 @@ def calculate_features():
     labels_df = pd.DataFrame()
     
     # Read actual classification label from the cloud, and add it to the dataframe
-    labels_df["target"] = get_point_lables(file_name)
+    labels_df["target"] = get_point_lables(file_name)[indices]
 
     # Add x, y, z, z_pow2 and z_abs
     labels_df["x"] = points[:, 0]
@@ -167,8 +169,8 @@ def calculate_features():
     big_tic = time.perf_counter()
 
     # Calculate feature classes
-    feature_classes = [kNNCentroidDistance, LowerVoxels, UpperVoxels, AroundVoxels, CovarianceEigenvalue]
-    feature_state_classes = [ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState]
+    feature_classes = [kNNCentroidDistance, LowerVoxels, UpperVoxels, AroundVoxels, CovarianceEigenvalue, EdgeVoxels]
+    feature_state_classes = [ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, SmallScalableFeatureState]
 
     # Initialize multiprocessing pool
     pool = mp.Pool(mp.cpu_count())
@@ -206,8 +208,8 @@ def classify_points():
   feature_list = all_features.columns.tolist()
 
   # Remove features
-  remove_group_features = ["LowerVoxels"]
-  remove_single_features = []
+  remove_group_features = ['EdgeVoxels', 'x', 'y', '10', 'CovarianceEigenvalue_feature_6'] #"LowerVoxels"]'CovarianceEigenvalue_feature_6'
+  remove_single_features = ['z', 'z_abs'] #  '10_knn_mean_dist'
 
   remove_features = []
   for feature_group_name in remove_group_features:  
@@ -250,15 +252,15 @@ def classify_points():
     evaluation_data = pd.concat([evaluation_data, data])
 
   evaluation_features = evaluation_data.drop(["target"] + remove_features, axis=1)
-  evaluation_targets = evaluation_data["target"].to_numpy()
+  targets = evaluation_data["target"].to_numpy()
   predictions = model.predict(evaluation_features)
 
   # Evaluation metrics
   # iou and f1 formulas from: https://tomkwok.com/posts/iou-vs-f1/
   print("Evaluation:")
-  point_percent = np.sum(np.equal(predictions, evaluation_targets))/predictions.shape[0]
-  precision = precision_score(evaluation_targets, predictions)
-  recall = recall_score(evaluation_targets, predictions)
+  point_percent = np.sum(np.equal(predictions, targets))/predictions.shape[0]
+  precision = precision_score(targets, predictions)
+  recall = recall_score(targets, predictions)
   iou = (precision*recall) / (precision + recall - (precision*recall))
   f1 = (2*precision*recall)/(precision+recall)
   print("\tPoint perecentage:", point_percent)
@@ -303,9 +305,10 @@ def test_feature_removal():
 
     # features_names = feature_list
     features_names = ["x", "y", "z", "10", "kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", 
-                       "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1", "CovarianceEigenvalue_feature_2", 
-                       "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
-                       "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", ] #, "EdgeVoxels"] # "NormalCluster",
+                      "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1", "CovarianceEigenvalue_feature_2", 
+                      "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
+                      "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", "CovarianceEigenvalue_feature_8", 
+                      "CovarianceEigenvalue_feature_9", "CovarianceEigenvalue_feature_10", "CovarianceEigenvalue_feature_11"] #, "EdgeVoxels"] # "NormalCluster",
     features_names = [f for f in features_names if f not in worst_features]
 
     # Remove every NormalCluster
@@ -347,13 +350,13 @@ def test_feature_removal():
         evaluation_data = pd.concat([evaluation_data, data])
 
       evaluation_features = evaluation_data.drop(["target"] + without_features, axis=1)
-      evaluation_targets = evaluation_data["target"].to_numpy()
+      targets = evaluation_data["target"].to_numpy()
 
       predictions = model.predict(evaluation_features)
       
-      point_percent = np.sum(np.equal(predictions, evaluation_targets))/predictions.shape[0]
-      precision = precision_score(evaluation_targets, predictions)
-      recall = recall_score(evaluation_targets, predictions)
+      point_percent = np.sum(np.equal(predictions, targets))/predictions.shape[0]
+      precision = precision_score(targets, predictions)
+      recall = recall_score(targets, predictions)
 
       # Formulas from: https://tomkwok.com/posts/iou-vs-f1/
       iou = (precision*recall) / (precision + recall - (precision*recall))
@@ -435,7 +438,7 @@ def test_feature():
     print("Testing out", all_features[feature_index][2], "on", cloud_file_name)
     cloud = read_roof_cloud(cloud_file_name)
     cloud, downsampling_factor = normalize_cloud(cloud)
-    cloud = remove_noise(cloud)
+    cloud, indices = remove_noise(cloud)
     state = all_features[feature_index][1](cloud, downsampling_factor)
     f = all_features[feature_index][0](state)
     f.run_test(all_features[feature_index][2], cloud_file_name)
@@ -537,7 +540,7 @@ def plot_feature_figure():
     if i < len(chosen_images):
       img = mpimg.imread(os.path.join(image_folder, chosen_images[i]))
       axi.imshow(img, interpolation='nearest')
-      axi.set_title(chosen_images[i])
+      # axi.set_title(chosen_images[i])
 
   gradient = np.linspace(0, 1, 256)
   gradient = np.vstack((gradient, gradient))
@@ -553,6 +556,123 @@ def plot_feature_figure():
   else:
     save_name = f"{chosen_feature_name}_plots.png"
   plt.savefig(os.path.join(image_folder, save_name), bbox_inches=0)
+
+def calculate_feature_performance():
+  training_data = pd.DataFrame()
+  for file_name in training_data_file_names:
+    data = pd.read_csv(get_dataset_path(file_name), index_col=0)
+    training_data = pd.concat([training_data, data])
+  
+  # idx0 = training_data.index.values[training_data["target"] == 0]
+  # idx1 = training_data.index.values[training_data["target"] == 1]
+  # len0 = len(idx0)  # 0000
+  # len1 = len(idx1)  # 2500
+  # print(f'len0: {len0}, len1: {len1}')
+
+  # Define feature set and feature list
+  all_features = training_data.drop("target", axis=1)
+  feature_list = all_features.columns.tolist()
+  targets = training_data["target"]
+  # X_train, X_validation, y_train, y_validation = train_test_split(features, targets, train_size=0.8, random_state=1234)
+
+  def calculate_iou(predictions, targets):    
+    precision = precision_score(targets, predictions)
+    recall = recall_score(targets, predictions)
+    if precision + recall < 0.00001:
+      # Avoid zero-division
+      #print('return 0: add')
+      return 0
+    return np.divide(precision*recall, precision + recall - (precision*recall))
+  
+  def optimize_iou(values, targets, f_min, f_max, rec_left):
+    step = (f_max - f_min) / 10
+    # best iou (iou, threshold)
+    iou_max = (0, 0)
+    for threshold in [f_min + step*i for i in range(11)]: # range(f_min, f_max+step, step):
+      # Need to test > and <
+      pred_under = np.where(values < threshold, 1, 0)
+      pred_over = np.where(values >= threshold, 1, 0)
+      targets_set = set(targets)
+      # print('set pred_under', set(pred_under))
+      # print('set pred_over ', set(pred_over))
+      # print('set targets   ', set(targets))
+      if len(targets_set - set(pred_under)) > 0:
+        iou_under = 0
+      else:
+        iou_under = calculate_iou(pred_under, targets)
+
+      if len(targets_set - set(pred_over)) > 0:
+        iou_over = 0
+      else:
+        iou_over = calculate_iou(pred_over, targets)
+
+      if iou_under > iou_max[0]:
+        iou_max = (iou_under, threshold)
+      
+      if iou_over > iou_max[0]:
+        iou_max = (iou_over, threshold)
+
+    if rec_left > 0:
+      new_f_min = iou_max[1]-step
+      new_f_max = iou_max[1]+step
+      return optimize_iou(values, targets, new_f_min, new_f_max, rec_left - 1)
+    else:
+      return iou_max
+
+
+  one_targets = sum([1 if x == 1 else 0 for x in targets])
+  zero_targets = sum([1 if x == 0 else 0 for x in targets])
+  one_weight = zero_targets/(one_targets+zero_targets)
+  zero_weight = one_targets/(one_targets+zero_targets)
+
+  print(f'zero_weight: {zero_weight}, one_weight: {one_weight}')
+
+  # test_values = np.random.randint(0, 2, targets.shape[0])
+  test_values = np.random.choice([0, 1], size=targets.shape[0]) #, p=[.154, .846])
+  test_targets = np.random.choice([0, 1], size=targets.shape[0], p=[.154, .846])
+  print('random test IoU:', calculate_iou(test_values, test_targets))
+
+  
+  feature_performance = {}
+  for feature_name in tqdm(feature_list):
+    # print(f"\tCalculating for feature: {feature_name}")
+    feature_values = all_features[feature_name].to_numpy()
+    f_min = np.min(feature_values)
+    f_max = np.max(feature_values)
+    # pred_under = np.where(feature_values < f_min, 0, 1)
+    # pred_over = np.where(feature_values >= f_min, 0, 1)
+    # print('set pred_under', set(pred_under))
+    # print('set pred_over ', set(pred_over))
+    # print('set targets   ', set(targets))
+    # print('diff:', len(set(targets) - set(pred_under)))
+    iou, threshold = optimize_iou(feature_values, targets, f_min, f_max, 3)
+    # print(f"\t\t Best IoU was {iou} with threshold {threshold}")
+    feature_performance[feature_name] = iou
+    # break
+  
+  feature_groups = ["kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", "EdgeVoxels",
+                     "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1", "CovarianceEigenvalue_feature_2", 
+                     "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
+                     "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", "CovarianceEigenvalue_feature_8", 
+                     "CovarianceEigenvalue_feature_9", "CovarianceEigenvalue_feature_10"]
+
+  for group in feature_groups:
+    s = group
+    for key, val, in sorted(feature_performance.items()):
+      if group in key:
+        s += f"\t&\t{(val*10):.4}"
+    
+    s += "\\\\"
+    print("\\hline")
+    print(s)
+    
+
+  # print("Feature performance:")
+  # for key, val, in sorted(feature_performance.items()):
+  #   print(f"{key: <42}: {val:.6}")
+  
+    
+
   
   
 
@@ -577,7 +697,10 @@ def main():
     elif main_menu_choice == 5:
       print('Plot feature figure')
       plot_feature_figure()
-              
+    elif main_menu_choice == 6:
+      print('Calculate feature performance')
+      calculate_feature_performance()
+
     main_menu_choice = get_main_menu_choice()
 
 

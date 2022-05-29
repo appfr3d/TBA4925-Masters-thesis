@@ -14,8 +14,6 @@ K = 2*H + 1
 L = 4 # length to go up and down in z neighbors
 Z = 2*L + 1
 
-outer_sides = [[0,1,2,3,4], [4,9,13,18,23], [19,20,21,22,23], [0,5,10,14,29]]
-inner_sides = [[6,7,8], [8,12,17], [15,16,17], [6,11,15]]
 class AroundVoxels(VoxelFeature):
   def run_at_scale(self, scale:float, knn_scale:int, visualize=True):
     all_voxels = self.voxel_grid.get_voxels()
@@ -41,10 +39,17 @@ class AroundVoxels(VoxelFeature):
       around_query = o3d.utility.Vector3dVector(reshaped_around)
 
       # Visualize above_query
-      # pcd = o3d.geometry.PointCloud()
-      # pcd.points = around_query
-      # pcd.paint_uniform_color([1,0,0])
-      # o3d.visualization.draw([self.voxel_grid, pcd])
+      # q_pcd = o3d.geometry.PointCloud()
+      # q_pcd.points = around_query
+      # q_pcd.paint_uniform_color([1,0,0])
+      # c_pcd = o3d.geometry.PointCloud()
+      # c_pcd.points = o3d.utility.Vector3dVector(self.state.points)
+      # c_colors = copy.deepcopy(np.asarray(self.state.cloud.colors))
+      # point_indices = self.grid_index_to_point_indices[tuple(grid_index)]
+      # c_colors[point_indices] = [0, 1, 0]
+      # c_pcd.colors = o3d.utility.Vector3dVector(c_colors)
+      # new_voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(c_pcd, voxel_size=scale)
+      # o3d.visualization.draw_geometries([new_voxels, q_pcd], width=1024, height=1024)
 
       around_included = np.array(self.voxel_grid.check_if_included(around_query)).reshape((K, K, Z))
 

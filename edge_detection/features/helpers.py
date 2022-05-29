@@ -1,7 +1,6 @@
 from cProfile import label
 import os
 from matplotlib import cm
-from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import open3d as o3d
 
@@ -75,13 +74,14 @@ def remove_noise(cloud):
   # o3d.visualization.draw_geometries([roof_cloud, noise_cloud], width=1024, height=1024)
 
   # Final cloud
+  indices = labels >= 0
   final_cloud = o3d.geometry.PointCloud()
-  final_cloud.points = o3d.utility.Vector3dVector(points[labels >= 0])
+  final_cloud.points = o3d.utility.Vector3dVector(points[indices])
   final_cloud.colors = o3d.utility.Vector3dVector(np.asarray(cloud.colors)[labels >= 0])
   if cloud.has_normals():
     final_cloud.normals = o3d.utility.Vector3dVector(np.asarray(cloud.normals)[labels >= 0])
 
-  return final_cloud
+  return final_cloud, indices
 
 
 def write_roof_cloud_result(file_name, cloud):
@@ -90,7 +90,13 @@ def write_roof_cloud_result(file_name, cloud):
   return o3d.io.write_point_cloud(os.path.join(results_folder, file_name), cloud, print_progress=True)
 
 def save_scaled_feature_image(vis, cloud, labels, image_folder, scale_name):
-  colormap = cm.get_cmap('rainbow') 
+  colormap = cm.get_cmap('rainbow')
+
+  # Scale labels between 0 and 1 here to get full color output:
+  min_l = np.min(labels)
+  max_l = np.max(labels) - min_l
+  labels = (1/max_l)*(labels-min_l)
+
   colors = np.array([colormap(l) for l in labels])
   cloud.colors = o3d.utility.Vector3dVector(colors[:, :3])
 

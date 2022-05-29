@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 #####
 class CovarianceEigenvalue(ScalableMultiFeature):
   def run_at_scale(self, scale: float, knn_scale: int):
-    labels = np.zeros((8, self.state.points.shape[0]))
+    labels = np.zeros((11, self.state.points.shape[0]))
     covariances = np.asarray(o3d.geometry.PointCloud.estimate_point_covariances(self.state.cloud, o3d.geometry.KDTreeSearchParamRadius(scale)))
     
     # Implementing functions for the 8 features proposed by Weinmann et. al.
