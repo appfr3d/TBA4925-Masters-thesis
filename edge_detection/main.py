@@ -1,8 +1,8 @@
 import os
+from tkinter.tix import Tree
 import numpy as np
 import pandas as pd
 import open3d as o3d
-from torch import threshold
 import trimesh
 import time
 import multiprocessing as mp
@@ -14,7 +14,7 @@ from matplotlib import cm
 
 from catboost import CatBoostClassifier, Pool
 
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import precision_score, recall_score, jaccard_score
 from sklearn.model_selection import train_test_split
 
 from features.feature import ScalableFeatureState, SmallScalableFeatureState
@@ -42,7 +42,7 @@ feature_names = list(map(lambda f: f[0].__name__, all_features))
 
 
 test_file_names = ["32-1-510-215-53-test-1.ply", "32-1-510-215-53-test-2.ply", "32-1-510-215-53-test-3.ply", 
-                   "32-1-510-215-53-test-4.ply", "32-1-510-215-53-test-5.ply", "32-1-510-215-53-test-6.ply",
+                   "32-1-510-215-53-test-4.ply", "32-1-510-215-53-test-5.ply","32-1-510-215-53-test-6.ply",
                    "32-1-510-215-53-test-7.ply", "32-1-510-215-53-test-8.ply", "32-1-510-215-53-test-9.ply",
                    "32-1-510-215-53-test-10.ply", "32-1-510-215-53-test-11.ply", "32-1-510-215-53-test-12.ply",
                    "32-1-510-215-53-test-13.ply", "32-1-510-215-53-test-14.ply"]
@@ -57,7 +57,7 @@ evaluation_data_file_names = ["32-1-510-215-53-test-10.csv", "32-1-510-215-53-te
 
 def get_main_menu_choice():
   print("\n\nMain Menu:")
-  choices = ["Calculate features", "Classify points", "Calculate and classify", "Test feature removal", "Test feature", "Plot feature figure", "Calculate feature performance"]
+  choices = ["Calculate features", "Classify points", "Calculate and classify", "Test feature removal", "Test feature", "Plot feature figure", "Plot feature time consumption", "Calculate feature performance", "Display data metrics"]
   for choice_i, choice in enumerate(choices):
     print("(" + str(choice_i) + ") " + str(choice))
   print("(-1) Quit")
@@ -144,7 +144,7 @@ def calculate_features():
     print("Calculating features for file:", file_name)
     cloud = read_roof_cloud(file_name)
     cloud, downsampling_factor = normalize_cloud(cloud)
-    cloud, indices = remove_noise(cloud)
+    # cloud, indices = remove_noise(cloud)
     points = np.asarray(cloud.points)
     print(f"File contains {points.shape[0]} points.")
 
@@ -152,7 +152,7 @@ def calculate_features():
     labels_df = pd.DataFrame()
     
     # Read actual classification label from the cloud, and add it to the dataframe
-    labels_df["target"] = get_point_lables(file_name)[indices]
+    labels_df["target"] = get_point_lables(file_name)# [indices]
 
     # Add x, y, z, z_pow2 and z_abs
     labels_df["x"] = points[:, 0]
@@ -200,7 +200,7 @@ def classify_points():
   training_data = pd.DataFrame()
   for file_name in training_data_file_names:
     data = pd.read_csv(get_dataset_path(file_name), index_col=0)
-    training_data = pd.concat([training_data, data])
+    training_data = pd.concat([training_data, data], ignore_index=True)
 
   # REMOVE FEATURES
   # Remove target from features
@@ -208,8 +208,8 @@ def classify_points():
   feature_list = all_features.columns.tolist()
 
   # Remove features
-  remove_group_features = ['EdgeVoxels', 'x', 'y', '10', 'CovarianceEigenvalue_feature_6'] #"LowerVoxels"]'CovarianceEigenvalue_feature_6'
-  remove_single_features = ['z', 'z_abs'] #  '10_knn_mean_dist'
+  remove_group_features = ['x', 'y', 'CovarianceEigenvalue_feature_2'] #"LowerVoxels"]'CovarianceEigenvalue_feature_6''EdgeVoxels', 
+  remove_single_features = ['z', 'z_abs'] + [f'CovarianceEigenvalue_feature_{i}_scale_0' for i in range(11)] #  '10_knn_mean_dist'
 
   remove_features = []
   for feature_group_name in remove_group_features:  
@@ -229,9 +229,10 @@ def classify_points():
   train_pool = Pool(data=X_train, label=y_train, weight=target_weight)
   model = CatBoostClassifier(
     iterations=500,
-    learning_rate=0.1,
+    learning_rate=0.05,
     random_seed=42,
     use_best_model=True,
+    early_stopping_rounds=30,
     logging_level="Silent",
   )
   model.fit(train_pool, eval_set=(X_validation, y_validation), verbose=True)
@@ -243,13 +244,21 @@ def classify_points():
   feature_importance.sort_values(by=["importance"], ascending=[False], inplace=True)
   print("\nFeature importance:")
   pd.set_option('display.max_rows', len(feature_list))
-  print(feature_importance)
+  print(feature_importance.to_latex(columns=["feature", "importance"]))
+  # print(feature_importance.to_latex())
 
   # EVALUATE
   evaluation_data = pd.DataFrame()
   for file_name in evaluation_data_file_names:
     data = pd.read_csv(get_dataset_path(file_name), index_col=0)
-    evaluation_data = pd.concat([evaluation_data, data])
+    evaluation_data = pd.concat([evaluation_data, data], ignore_index=True)
+
+  # Randomly remove non_edges to balance classes
+  evaluation_edges = evaluation_data.index.values[evaluation_data["target"] == 0]
+  evaluation_non_edges = evaluation_data.index.values[evaluation_data["target"] == 1]
+  r = np.random.RandomState(1234)
+  rows = r.choice(evaluation_non_edges, len(evaluation_non_edges) - len(evaluation_edges), replace=False)
+  evaluation_data.drop(rows, inplace=True)
 
   evaluation_features = evaluation_data.drop(["target"] + remove_features, axis=1)
   targets = evaluation_data["target"].to_numpy()
@@ -258,6 +267,9 @@ def classify_points():
   # Evaluation metrics
   # iou and f1 formulas from: https://tomkwok.com/posts/iou-vs-f1/
   print("Evaluation:")
+  # TODO: try to flip predictions, as 1 is true prediction in score functions
+  # predictions = predictions.astype(int)^1 # got super bad results!!!!
+
   point_percent = np.sum(np.equal(predictions, targets))/predictions.shape[0]
   precision = precision_score(targets, predictions)
   recall = recall_score(targets, predictions)
@@ -288,7 +300,7 @@ def classify_points():
     o3d.visualization.draw_geometries([pcd])
 
 def test_feature_removal():
-  worst_features = [] #"z", "x", "EdgeVoxels"]
+  worst_features = ["x"] #"z",  "EdgeVoxels"]
   test_again = True
 
   # TODO: test removal of one and one feature, not just feature groups
@@ -297,18 +309,20 @@ def test_feature_removal():
     training_data = pd.DataFrame()
     for file_name in training_data_file_names:
       data = pd.read_csv(get_dataset_path(file_name), index_col=0)
-      training_data = pd.concat([training_data, data])
+      training_data = pd.concat([training_data, data], ignore_index=True)
+
+    
 
     # Loop through features and create a set with one removed at a time
     all_features = training_data.drop("target", axis=1)
     feature_list = all_features.columns.tolist()
 
     # features_names = feature_list
-    features_names = ["x", "y", "z", "10", "kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", 
-                      "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1", "CovarianceEigenvalue_feature_2", 
+    features_names = ["x", "y", "10", "kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", "EdgeVoxels", # "z",
+                      "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1_", "CovarianceEigenvalue_feature_2", 
                       "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
                       "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", "CovarianceEigenvalue_feature_8", 
-                      "CovarianceEigenvalue_feature_9", "CovarianceEigenvalue_feature_10", "CovarianceEigenvalue_feature_11"] #, "EdgeVoxels"] # "NormalCluster",
+                      "CovarianceEigenvalue_feature_9", "CovarianceEigenvalue_feature_10"] #, ] # "NormalCluster",
     features_names = [f for f in features_names if f not in worst_features]
 
     # Remove every NormalCluster
@@ -348,6 +362,13 @@ def test_feature_removal():
       for file_name in evaluation_data_file_names:
         data = pd.read_csv(get_dataset_path(file_name), index_col=0)
         evaluation_data = pd.concat([evaluation_data, data])
+
+      # Randomly remove non_edges to balance classes
+      evaluation_edges = evaluation_data.index.values[evaluation_data["target"] == 0]
+      evaluation_non_edges = evaluation_data.index.values[evaluation_data["target"] == 1]
+      r = np.random.RandomState(1234)
+      rows = r.choice(evaluation_non_edges, len(evaluation_non_edges) - len(evaluation_edges), replace=False)
+      evaluation_data.drop(rows, inplace=True)
 
       evaluation_features = evaluation_data.drop(["target"] + without_features, axis=1)
       targets = evaluation_data["target"].to_numpy()
@@ -557,32 +578,219 @@ def plot_feature_figure():
     save_name = f"{chosen_feature_name}_plots.png"
   plt.savefig(os.path.join(image_folder, save_name), bbox_inches=0)
 
+def plot_feature_time_consumption():
+  times = {
+    "1": {
+      "points": 5943,
+      "EdgeVoxels": 25.12,
+      "UpperVoxels": 0.5676,
+      "LowerVoxels": 0.5775,
+      "kNNCentroidDistance": 1.529,
+      "AroundVoxels": 2.997,
+      "CovarianceEigenvalue":  3.086,
+      "total": 29.0412
+    },
+    "2": {
+      "points": 3734,
+      "EdgeVoxels": 15.97,
+      "UpperVoxels": 0.4553,
+      "LowerVoxels": 0.4512,
+      "kNNCentroidDistance": 0.9926,
+      "AroundVoxels": 2.553,
+      "CovarianceEigenvalue":  1.792,
+      "total": 19.6341
+    },
+    "3": {
+      "points": 9101,
+      "EdgeVoxels": 39.26,
+      "UpperVoxels": 0.8751,
+      "LowerVoxels": 0.8723,
+      "kNNCentroidDistance": 2.409,
+      "AroundVoxels": 4.85,
+      "CovarianceEigenvalue":  4.895,
+      "total": 43.2816
+    },
+    "4": {
+      "points": 7058,
+      "EdgeVoxels": 31.49,
+      "UpperVoxels": 0.7975,
+      "LowerVoxels": 0.8079,
+      "kNNCentroidDistance": 1.93,
+      "AroundVoxels": 4.231,
+      "CovarianceEigenvalue":  3.699,
+      "total": 35.8951
+    },
+    "5": {
+      "points": 3232,
+      "EdgeVoxels": 14.43,
+      "UpperVoxels": 0.3914,
+      "LowerVoxels": 0.3863,
+      "kNNCentroidDistance": 0.8621,
+      "AroundVoxels": 2.088,
+      "CovarianceEigenvalue":  1.643,
+      "total": 18.1289
+    },
+    "6": {
+      "points": 30577,
+      "EdgeVoxels": 130.1,
+      "UpperVoxels": 2.56,
+      "LowerVoxels": 2.588,
+      "kNNCentroidDistance": 8.145,
+      "AroundVoxels": 12.02,
+      "CovarianceEigenvalue":  22.24,
+      "total": 137.3582
+    },
+    "7": {
+      "points": 20009,
+      "EdgeVoxels": 85.82,
+      "UpperVoxels": 1.749,
+      "LowerVoxels": 1.756,
+      "kNNCentroidDistance": 5.328,
+      "AroundVoxels": 8.971,
+      "CovarianceEigenvalue":  12.26,
+      "total": 91.8289
+    },
+    "8": {
+      "points": 6814,
+      "EdgeVoxels": 28.12,
+      "UpperVoxels": 0.602,
+      "LowerVoxels": 0.6116,
+      "kNNCentroidDistance": 1.786,
+      "AroundVoxels": 3.24,
+      "CovarianceEigenvalue":  3.615,
+      "total": 31.9386
+    },
+    "9": {
+      "points": 38022,
+      "EdgeVoxels": 160.4,
+      "UpperVoxels": 2.894,
+      "LowerVoxels": 2.928,
+      "kNNCentroidDistance": 10.02,
+      "AroundVoxels": 13.91,
+      "CovarianceEigenvalue": 35.07,
+      "total": 168.2747
+    },
+    "10": {
+      "points": 5692,
+      "EdgeVoxels": 23.77,
+      "UpperVoxels": 0.6153,
+      "LowerVoxels": 0.6202,
+      "kNNCentroidDistance": 1.484,
+      "AroundVoxels": 3.37,
+      "CovarianceEigenvalue": 2.808,
+      "total": 27.3836
+    },
+    "11": {
+      "points": 3995,
+      "EdgeVoxels": 16.97,
+      "UpperVoxels": 0.4879,
+      "LowerVoxels": 0.4999,
+      "kNNCentroidDistance": 1.056,
+      "AroundVoxels": 2.746,
+      "CovarianceEigenvalue": 1.937,
+      "total": 20.3630
+    },
+    "12": {
+      "points": 34875,
+      "EdgeVoxels": 146.6,
+      "UpperVoxels": 2.824,
+      "LowerVoxels": 2.887,
+      "kNNCentroidDistance": 9.308,
+      "AroundVoxels": 13.12,
+      "CovarianceEigenvalue": 30.72,
+      "total": 154.4305
+    },
+    "13": {
+      "points": 8355,
+      "EdgeVoxels": 35.56,
+      "UpperVoxels": 0.842,
+      "LowerVoxels": 0.8564,
+      "kNNCentroidDistance": 2.228,
+      "AroundVoxels": 4.044,
+      "CovarianceEigenvalue": 4.591,
+      "total": 39.5298
+    },
+    "14": {
+      "points": 9850,
+      "EdgeVoxels": 41.67,
+      "UpperVoxels": 0.8975,
+      "LowerVoxels": 0.9182,
+      "kNNCentroidDistance": 2.544,
+      "AroundVoxels": 4.792,
+      "CovarianceEigenvalue": 5.272,
+      "total": 45.5740
+    }
+  }
+
+  '''
+    "points": 5943,
+    "EdgeVoxels": 25.12,
+    "UpperVoxels": 0.5676,
+    "LowerVoxels": 0.5775,
+    "kNNCentroidDistance": 1.529,
+    "AroundVoxels": 2.997,
+    "CovarianceEigenvalue":  3.086,
+    "total": 29.0412
+  '''
+
+  num_points = np.array([f["points"] for f in times.values()])
+
+  edge_voxels             = np.array([f["EdgeVoxels"] for f in times.values()])
+  upper_voxels            = np.array([f["UpperVoxels"] for f in times.values()])
+  lower_voxels            = np.array([f["LowerVoxels"] for f in times.values()])
+  kNN_centroid_distance   = np.array([f["kNNCentroidDistance"] for f in times.values()])
+  around_voxels           = np.array([f["AroundVoxels"] for f in times.values()])
+  covariance_eigenvalue   = np.array([f["CovarianceEigenvalue"] for f in times.values()])
+  total                   = np.array([f["total"] for f in times.values()])
+  
+  plt.subplot(1, 2, 1)
+  plt.scatter(num_points, upper_voxels, label="UpperVoxels", alpha=0.8)
+  plt.scatter(num_points, lower_voxels, label="LowerVoxels", alpha=0.8)
+  plt.scatter(num_points, kNN_centroid_distance, label="kNNCentroidDistance", alpha=0.8)
+  plt.scatter(num_points, around_voxels, label="AroundVoxels", alpha=0.8)
+  plt.scatter(num_points, covariance_eigenvalue, label="CovarianceEigenvalue", alpha=0.8)
+  
+  plt.legend()
+  plt.grid(True)
+  plt.xlabel("Number of points")
+  plt.ylabel("Seconds")
+
+  plt.subplot(1, 2, 2)
+  plt.scatter(num_points, edge_voxels, label="EdgeVoxels", alpha=0.8)
+  plt.scatter(num_points, total, label="Total time", alpha=0.8)
+  plt.legend()
+  plt.grid(True)
+  plt.xlabel("Number of points")
+  plt.ylabel("Seconds")
+  plt.show()
+
 def calculate_feature_performance():
   training_data = pd.DataFrame()
   for file_name in training_data_file_names:
     data = pd.read_csv(get_dataset_path(file_name), index_col=0)
-    training_data = pd.concat([training_data, data])
+    training_data = pd.concat([training_data, data], ignore_index=True)
   
-  # idx0 = training_data.index.values[training_data["target"] == 0]
-  # idx1 = training_data.index.values[training_data["target"] == 1]
-  # len0 = len(idx0)  # 0000
-  # len1 = len(idx1)  # 2500
-  # print(f'len0: {len0}, len1: {len1}')
+  # Randomly remove non_edges to balance classes
+  training_edges = training_data.index.values[training_data["target"] == 0]
+  training_non_edges = training_data.index.values[training_data["target"] == 1]
+  r = np.random.RandomState(1234)
+  rows = r.choice(training_non_edges, len(training_non_edges) - len(training_edges), replace=False)
+  training_data.drop(rows, inplace=True)
 
   # Define feature set and feature list
   all_features = training_data.drop("target", axis=1)
   feature_list = all_features.columns.tolist()
   targets = training_data["target"]
-  # X_train, X_validation, y_train, y_validation = train_test_split(features, targets, train_size=0.8, random_state=1234)
 
   def calculate_iou(predictions, targets):    
-    precision = precision_score(targets, predictions)
-    recall = recall_score(targets, predictions)
-    if precision + recall < 0.00001:
-      # Avoid zero-division
-      #print('return 0: add')
-      return 0
-    return np.divide(precision*recall, precision + recall - (precision*recall))
+    # precision = precision_score(targets, predictions)
+    # recall = recall_score(targets, predictions)
+    # if precision + recall < 0.00001:
+    #   # Avoid zero-division
+    #   #print('return 0: add')
+    #   return 0
+    # return np.divide(precision*recall, precision + recall - (precision*recall))
+    return jaccard_score(targets, predictions)
   
   def optimize_iou(values, targets, f_min, f_max, rec_left):
     step = (f_max - f_min) / 10
@@ -620,56 +828,113 @@ def calculate_feature_performance():
       return iou_max
 
 
-  one_targets = sum([1 if x == 1 else 0 for x in targets])
-  zero_targets = sum([1 if x == 0 else 0 for x in targets])
-  one_weight = zero_targets/(one_targets+zero_targets)
-  zero_weight = one_targets/(one_targets+zero_targets)
+  # one_targets = sum([1 if x == 1 else 0 for x in targets])
+  # zero_targets = sum([1 if x == 0 else 0 for x in targets])
+  # one_weight = zero_targets/(one_targets+zero_targets)
+  # zero_weight = one_targets/(one_targets+zero_targets)
+  # print(f'zero_targets: {zero_targets}, one_targets: {one_targets}')
+  # print(f'zero_weight: {zero_weight}, one_weight: {one_weight}')
 
-  print(f'zero_weight: {zero_weight}, one_weight: {one_weight}')
+  # test_values = np.random.choice([0, 1], size=targets.shape[0]) #, p=[.154, .846])
+  # test_targets = np.random.choice([0, 1], size=targets.shape[0]) #, p=[.154, .846])
+  # test_values = r.randint(0, 2, targets.shape[0])
+  # print('random test IoU:', calculate_iou(test_values, targets))
 
-  # test_values = np.random.randint(0, 2, targets.shape[0])
-  test_values = np.random.choice([0, 1], size=targets.shape[0]) #, p=[.154, .846])
-  test_targets = np.random.choice([0, 1], size=targets.shape[0], p=[.154, .846])
-  print('random test IoU:', calculate_iou(test_values, test_targets))
+  # zero_values = np.zeros(targets.shape[0])
+  # print('all zeros IoU  :', calculate_iou(zero_values, targets))
 
-  
+  # ones_values = np.ones(targets.shape[0])
+  # print('all ones IoU   :', calculate_iou(ones_values, targets))
+
   feature_performance = {}
   for feature_name in tqdm(feature_list):
-    # print(f"\tCalculating for feature: {feature_name}")
     feature_values = all_features[feature_name].to_numpy()
     f_min = np.min(feature_values)
     f_max = np.max(feature_values)
-    # pred_under = np.where(feature_values < f_min, 0, 1)
-    # pred_over = np.where(feature_values >= f_min, 0, 1)
-    # print('set pred_under', set(pred_under))
-    # print('set pred_over ', set(pred_over))
-    # print('set targets   ', set(targets))
-    # print('diff:', len(set(targets) - set(pred_under)))
+    interval_range = f_max - f_min  
+    # add and subtract 5% of interval to remove the chance of labeling everything to one class
+    f_min += interval_range * 0.05
+    f_max -= interval_range * 0.05
+
     iou, threshold = optimize_iou(feature_values, targets, f_min, f_max, 3)
-    # print(f"\t\t Best IoU was {iou} with threshold {threshold}")
     feature_performance[feature_name] = iou
-    # break
   
-  feature_groups = ["kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", "EdgeVoxels",
-                     "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1", "CovarianceEigenvalue_feature_2", 
-                     "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
-                     "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", "CovarianceEigenvalue_feature_8", 
-                     "CovarianceEigenvalue_feature_9", "CovarianceEigenvalue_feature_10"]
+  feature_groups = ["LowerVoxels", "UpperVoxels", "AroundVoxels", "EdgeVoxels", 
+                    "10_knn_mean_dist", "10_knn_max_dist", "z_pow2", "kNNCentroidDistance",
+                    "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1_", "CovarianceEigenvalue_feature_2", 
+                    "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
+                    "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", "CovarianceEigenvalue_feature_8", 
+                    "CovarianceEigenvalue_feature_9", "CovarianceEigenvalue_feature_10"]
+
+  feature_group_to_name = {
+    "kNNCentroidDistance": "kNN C D", "LowerVoxels": "LowerVoxels", "UpperVoxels": "UpperVoxels", 
+    "AroundVoxels": "AroundVoxels", "EdgeVoxels": "EdgeVoxels", 
+    "CovarianceEigenvalue_feature_0": "Eigenvalue $\lambda_0$", 
+    "CovarianceEigenvalue_feature_1_": "Eigenvalue $\lambda_1$", 
+    "CovarianceEigenvalue_feature_2": "Eigenvalue $\lambda_2$", 
+    "CovarianceEigenvalue_feature_3": "Eigenvalue sum", 
+    "CovarianceEigenvalue_feature_4": "Omnivariance", 
+    "CovarianceEigenvalue_feature_5": "Eigenentropy", 
+    "CovarianceEigenvalue_feature_6": "Anisotropy", 
+    "CovarianceEigenvalue_feature_7": "Planarity", 
+    "CovarianceEigenvalue_feature_8": "Linearity", 
+    "CovarianceEigenvalue_feature_9": "Surface variation", 
+    "CovarianceEigenvalue_feature_10": "Sphericity"}
 
   for group in feature_groups:
-    s = group
+    s = feature_group_to_name[group]
+    group_values = []
+    has_combined = False
+    combined_value = 0
     for key, val, in sorted(feature_performance.items()):
       if group in key:
-        s += f"\t&\t{(val*10):.4}"
+        if key.endswith('_mean'):
+          combined_value = val
+          has_combined = True
+        else:
+          s += f"\t&\t{(val*100):.4}"
+          group_values.append(val*100)
+    
+    if has_combined:
+      s += f"\t&\t{(combined_value*100):.4}"
+    
+    mean_val = sum(group_values) / len(group_values)
+    s += f"\t&\t{(mean_val):.4}"
     
     s += "\\\\"
     print("\\hline")
     print(s)
-    
 
-  # print("Feature performance:")
-  # for key, val, in sorted(feature_performance.items()):
-  #   print(f"{key: <42}: {val:.6}")
+def display_data_metrics():
+  training_data = pd.DataFrame()
+  for file_name in training_data_file_names:
+    data = pd.read_csv(get_dataset_path(file_name), index_col=0)
+    training_data = pd.concat([training_data, data], ignore_index=True)
+  
+  training_targets = training_data["target"]
+  one_training = sum([1 if x == 1 else 0 for x in training_targets])
+  zero_training = sum([1 if x == 0 else 0 for x in training_targets])
+  
+  evaluation_data = pd.DataFrame()
+  for file_name in evaluation_data_file_names:
+    data = pd.read_csv(get_dataset_path(file_name), index_col=0)
+    evaluation_data = pd.concat([evaluation_data, data])
+  
+  evaluation_targets = evaluation_data["target"]
+  one_evaluation = sum([1 if x == 1 else 0 for x in evaluation_targets])
+  zero_evaluation = sum([1 if x == 0 else 0 for x in evaluation_targets])
+
+  print('Training:')
+  print(f'\tEdge points     : {zero_training}')
+  print(f'\tNon-edge points : {one_training}')
+  print(f'\tRatio           : {zero_training/one_training}')
+
+  print('\nEvaluation:')
+  print(f'\tEdge points     : {zero_evaluation}')
+  print(f'\tNon-edge points : {one_evaluation}')
+  print(f'\tRatio           : {zero_evaluation/one_evaluation}')
+  
+
   
     
 
@@ -698,8 +963,14 @@ def main():
       print('Plot feature figure')
       plot_feature_figure()
     elif main_menu_choice == 6:
+      print('Plot feature time consumption')
+      plot_feature_time_consumption()
+    elif main_menu_choice == 7:
       print('Calculate feature performance')
       calculate_feature_performance()
+    elif main_menu_choice == 8:
+      print('Display data metrics')
+      display_data_metrics()
 
     main_menu_choice = get_main_menu_choice()
 
