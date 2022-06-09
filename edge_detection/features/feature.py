@@ -114,7 +114,7 @@ class Feature():
         save_scaled_feature_image(vis, pcd, labels, image_folder, str(scale_i))
 
       # Combine scales as last labels 
-      labels = np.mean(all_labels)
+      labels = np.mean(all_labels, axis=0)
       # np.divide(np.sum(all_labels, axis=0), all_labels.shape[0])
       save_scaled_feature_image(vis, pcd, labels, image_folder, "Combined")
 

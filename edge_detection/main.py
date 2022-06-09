@@ -17,20 +17,24 @@ from catboost import CatBoostClassifier, Pool
 from sklearn.metrics import precision_score, recall_score, jaccard_score
 from sklearn.model_selection import train_test_split
 
-from features.feature import ScalableFeatureState, SmallScalableFeatureState
+from features.feature import FeatureState, ScalableFeatureState, SmallScalableFeatureState
 
 from features.lower_voxels import LowerVoxels
 from features.upper_voxels import UpperVoxels
 from features.edge_voxels import EdgeVoxels
 from features.around_voxels import AroundVoxels
 
+from features.z_pow2 import z_pow2
 from features.knn_centroid_distance import kNNCentroidDistance
+from features.knn_max_distance import kNNMaxDistance
 from features.normal_cluster import NormalCluster
 from features.covariance_eigenvalue import CovarianceEigenvalue
 
 from features.helpers import get_roof_folder, read_roof_cloud, normalize_cloud, get_project_folder, remove_noise
 
-all_features = [(kNNCentroidDistance, ScalableFeatureState, "knn_centroid_distance"), 
+all_features = [(z_pow2, FeatureState, "z_pow2"),
+                (kNNCentroidDistance, ScalableFeatureState, "knn_centroid_distance"),
+                (kNNMaxDistance, ScalableFeatureState, "knn_max_distance"),
                 (LowerVoxels, ScalableFeatureState, "lower_voxels"), 
                 (UpperVoxels, ScalableFeatureState, "upper_voxels"), 
                 (AroundVoxels, ScalableFeatureState, "around_voxels"), 
@@ -154,23 +158,28 @@ def calculate_features():
     # Read actual classification label from the cloud, and add it to the dataframe
     labels_df["target"] = get_point_lables(file_name)# [indices]
 
-    # Add x, y, z, z_pow2 and z_abs
+    # Add x, y, z so we can visualize after
     labels_df["x"] = points[:, 0]
     labels_df["y"] = points[:, 1]
     labels_df["z"] = points[:, 2]
-    labels_df["z_pow2"] = np.power(points[:, 2], 2)
-    labels_df["z_abs"] = np.abs(points[:, 2])
+
+    # TODO: TEST OUT THIS
+    Z = points[:, 2]
+    diff = np.max(Z) + np.min(Z)
+    Z -= diff/2
+    labels_df["z_pow2"] = np.power(Z, 2)
+    # labels_df["z_abs"] = np.abs(points[:, 2])
 
     # Add the mean distance to the points 10 nearest neighbors
-    SFS = ScalableFeatureState(cloud, downsampling_factor)
-    labels_df["10_knn_mean_dist"] = SFS.mean_distances * downsampling_factor
-    labels_df["10_knn_max_dist"] = SFS.max_distances * downsampling_factor
+    # SFS = ScalableFeatureState(cloud, downsampling_factor)
+    # labels_df["10_knn_mean_dist"] = SFS.mean_distances * downsampling_factor
+    # labels_df["10_knn_max_dist"] = SFS.max_distances * downsampling_factor
 
     big_tic = time.perf_counter()
 
     # Calculate feature classes
-    feature_classes = [kNNCentroidDistance, LowerVoxels, UpperVoxels, AroundVoxels, CovarianceEigenvalue, EdgeVoxels]
-    feature_state_classes = [ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, SmallScalableFeatureState]
+    feature_classes = [kNNCentroidDistance, kNNMaxDistance, LowerVoxels, UpperVoxels, AroundVoxels, EdgeVoxels, CovarianceEigenvalue]
+    feature_state_classes = [ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, ScalableFeatureState, SmallScalableFeatureState, ScalableFeatureState]
 
     # Initialize multiprocessing pool
     pool = mp.Pool(mp.cpu_count())
@@ -208,8 +217,8 @@ def classify_points():
   feature_list = all_features.columns.tolist()
 
   # Remove features
-  remove_group_features = ['x', 'y', 'CovarianceEigenvalue_feature_2'] #"LowerVoxels"]'CovarianceEigenvalue_feature_6''EdgeVoxels', 
-  remove_single_features = ['z', 'z_abs'] + [f'CovarianceEigenvalue_feature_{i}_scale_0' for i in range(11)] #  '10_knn_mean_dist'
+  remove_group_features = [] # 'EdgeVoxels'['CovarianceEigenvalue_feature_1_', 'CovarianceEigenvalue_feature_4', 'CovarianceEigenvalue_feature_8'] # 'x', 'y', 'CovarianceEigenvalue_feature_2' #"LowerVoxels"]'CovarianceEigenvalue_feature_6''EdgeVoxels', 
+  remove_single_features = ['x', 'y', 'z'] + [f'CovarianceEigenvalue_feature_{i}_scale_0' for i in range(11)] #  '10_knn_mean_dist'
 
   remove_features = []
   for feature_group_name in remove_group_features:  
@@ -244,7 +253,39 @@ def classify_points():
   feature_importance.sort_values(by=["importance"], ascending=[False], inplace=True)
   print("\nFeature importance:")
   pd.set_option('display.max_rows', len(feature_list))
-  print(feature_importance.to_latex(columns=["feature", "importance"]))
+
+  feature_group_to_name = {
+    "kNNCentroidDistance": "kNN C D",
+    "kNNMaxDistance": "kNN max dist.",
+    "z_pow2": "z\\textsuperscript{2}",
+    "LowerVoxels": "LowerVoxels", "UpperVoxels": "UpperVoxels", 
+    "AroundVoxels": "AroundVoxels", "EdgeVoxels": "EdgeVoxels",
+    "CovarianceEigenvalue_feature_0": "Eigenvalue $\lambda_0$", 
+    "CovarianceEigenvalue_feature_1_": "Eigenvalue $\lambda_1$", 
+    "CovarianceEigenvalue_feature_2": "Eigenvalue $\lambda_2$", 
+    "CovarianceEigenvalue_feature_3": "Eigenvalue sum", 
+    "CovarianceEigenvalue_feature_4": "Omnivariance", 
+    "CovarianceEigenvalue_feature_5": "Eigenentropy", 
+    "CovarianceEigenvalue_feature_6": "Anisotropy", 
+    "CovarianceEigenvalue_feature_7": "Planarity", 
+    "CovarianceEigenvalue_feature_8": "Linearity", 
+    "CovarianceEigenvalue_feature_9": "Surface variation", 
+    "CovarianceEigenvalue_feature_10": "Sphericity"}
+
+  i = 1
+  for index, row in feature_importance.iterrows():
+    found_key = False
+    for key in feature_group_to_name.keys():
+      if key in row["feature"]:
+        name = row["feature"].replace(key, feature_group_to_name[key] + " ")
+        print(f'{i}\t&\t{name}\t&{row["importance"]} \\\\')
+        found_key = True
+    if not found_key:
+      print(f'{i}\t&\t{row["feature"]}\t&{row["importance"]} \\\\')
+    i += 1
+
+  # print(feature_importance)
+  # print(feature_importance.to_latex(columns=["feature", "importance"], index=False))
   # print(feature_importance.to_latex())
 
   # EVALUATE
@@ -297,10 +338,10 @@ def classify_points():
     colors[predictions < 0.5] = [0, 1, 0] # Color positive values as green
     pcd.colors = o3d.utility.Vector3dVector(colors)
 
-    o3d.visualization.draw_geometries([pcd])
+    o3d.visualization.draw_geometries([pcd], width=1000, height=1000)
 
 def test_feature_removal():
-  worst_features = ["x"] #"z",  "EdgeVoxels"]
+  worst_features = ["x", "y"] #"z",  "EdgeVoxels"]
   test_again = True
 
   # TODO: test removal of one and one feature, not just feature groups
@@ -318,7 +359,7 @@ def test_feature_removal():
     feature_list = all_features.columns.tolist()
 
     # features_names = feature_list
-    features_names = ["x", "y", "10", "kNNCentroidDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", "EdgeVoxels", # "z",
+    features_names = ["x", "y", "kNNCentroidDistance", "kNNMaxDistance", "LowerVoxels", "UpperVoxels", "AroundVoxels", "EdgeVoxels", # "z",
                       "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1_", "CovarianceEigenvalue_feature_2", 
                       "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
                       "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", "CovarianceEigenvalue_feature_8", 
@@ -331,6 +372,7 @@ def test_feature_removal():
 
     drop_features = [f for feature_name in worst_features for f in feature_list if f.startswith(feature_name)]
     # drop_features = worst_features
+    drop_features += ["z"]
 
     results = np.zeros((len(features_names) + 1, 5))
 
@@ -351,7 +393,7 @@ def test_feature_removal():
 
       model = CatBoostClassifier(
         iterations=100,
-        learning_rate=0.1,
+        learning_rate=0.05,
         random_seed=42,
         logging_level="Silent"
       )
@@ -459,7 +501,7 @@ def test_feature():
     print("Testing out", all_features[feature_index][2], "on", cloud_file_name)
     cloud = read_roof_cloud(cloud_file_name)
     cloud, downsampling_factor = normalize_cloud(cloud)
-    cloud, indices = remove_noise(cloud)
+    # cloud, indices = remove_noise(cloud)
     state = all_features[feature_index][1](cloud, downsampling_factor)
     f = all_features[feature_index][0](state)
     f.run_test(all_features[feature_index][2], cloud_file_name)
@@ -586,6 +628,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.5676,
       "LowerVoxels": 0.5775,
       "kNNCentroidDistance": 1.529,
+      "kNNMaxDistance": 0.6945,
       "AroundVoxels": 2.997,
       "CovarianceEigenvalue":  3.086,
       "total": 29.0412
@@ -596,6 +639,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.4553,
       "LowerVoxels": 0.4512,
       "kNNCentroidDistance": 0.9926,
+      "kNNMaxDistance": 0.6945,
       "AroundVoxels": 2.553,
       "CovarianceEigenvalue":  1.792,
       "total": 19.6341
@@ -606,6 +650,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.8751,
       "LowerVoxels": 0.8723,
       "kNNCentroidDistance": 2.409,
+      "kNNMaxDistance": 1.372,
       "AroundVoxels": 4.85,
       "CovarianceEigenvalue":  4.895,
       "total": 43.2816
@@ -616,6 +661,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.7975,
       "LowerVoxels": 0.8079,
       "kNNCentroidDistance": 1.93,
+      "kNNMaxDistance": 0.8051,
       "AroundVoxels": 4.231,
       "CovarianceEigenvalue":  3.699,
       "total": 35.8951
@@ -626,6 +672,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.3914,
       "LowerVoxels": 0.3863,
       "kNNCentroidDistance": 0.8621,
+      "kNNMaxDistance": 0.4081,
       "AroundVoxels": 2.088,
       "CovarianceEigenvalue":  1.643,
       "total": 18.1289
@@ -636,6 +683,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 2.56,
       "LowerVoxels": 2.588,
       "kNNCentroidDistance": 8.145,
+      "kNNMaxDistance": 3.567,
       "AroundVoxels": 12.02,
       "CovarianceEigenvalue":  22.24,
       "total": 137.3582
@@ -646,6 +694,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 1.749,
       "LowerVoxels": 1.756,
       "kNNCentroidDistance": 5.328,
+      "kNNMaxDistance": 2.375,
       "AroundVoxels": 8.971,
       "CovarianceEigenvalue":  12.26,
       "total": 91.8289
@@ -656,6 +705,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.602,
       "LowerVoxels": 0.6116,
       "kNNCentroidDistance": 1.786,
+      "kNNMaxDistance": 0.8037,
       "AroundVoxels": 3.24,
       "CovarianceEigenvalue":  3.615,
       "total": 31.9386
@@ -666,6 +716,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 2.894,
       "LowerVoxels": 2.928,
       "kNNCentroidDistance": 10.02,
+      "kNNMaxDistance": 4.481,
       "AroundVoxels": 13.91,
       "CovarianceEigenvalue": 35.07,
       "total": 168.2747
@@ -676,6 +727,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.6153,
       "LowerVoxels": 0.6202,
       "kNNCentroidDistance": 1.484,
+      "kNNMaxDistance": 0.6698,
       "AroundVoxels": 3.37,
       "CovarianceEigenvalue": 2.808,
       "total": 27.3836
@@ -686,6 +738,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.4879,
       "LowerVoxels": 0.4999,
       "kNNCentroidDistance": 1.056,
+      "kNNMaxDistance": 0.585,
       "AroundVoxels": 2.746,
       "CovarianceEigenvalue": 1.937,
       "total": 20.3630
@@ -696,6 +749,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 2.824,
       "LowerVoxels": 2.887,
       "kNNCentroidDistance": 9.308,
+      "kNNMaxDistance": 4.034,
       "AroundVoxels": 13.12,
       "CovarianceEigenvalue": 30.72,
       "total": 154.4305
@@ -706,6 +760,7 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.842,
       "LowerVoxels": 0.8564,
       "kNNCentroidDistance": 2.228,
+      "kNNMaxDistance": 1.069,
       "AroundVoxels": 4.044,
       "CovarianceEigenvalue": 4.591,
       "total": 39.5298
@@ -716,22 +771,12 @@ def plot_feature_time_consumption():
       "UpperVoxels": 0.8975,
       "LowerVoxels": 0.9182,
       "kNNCentroidDistance": 2.544,
+      "kNNMaxDistance": 1.289,
       "AroundVoxels": 4.792,
       "CovarianceEigenvalue": 5.272,
       "total": 45.5740
     }
   }
-
-  '''
-    "points": 5943,
-    "EdgeVoxels": 25.12,
-    "UpperVoxels": 0.5676,
-    "LowerVoxels": 0.5775,
-    "kNNCentroidDistance": 1.529,
-    "AroundVoxels": 2.997,
-    "CovarianceEigenvalue":  3.086,
-    "total": 29.0412
-  '''
 
   num_points = np.array([f["points"] for f in times.values()])
 
@@ -739,6 +784,7 @@ def plot_feature_time_consumption():
   upper_voxels            = np.array([f["UpperVoxels"] for f in times.values()])
   lower_voxels            = np.array([f["LowerVoxels"] for f in times.values()])
   kNN_centroid_distance   = np.array([f["kNNCentroidDistance"] for f in times.values()])
+  kNN_max_distance        = np.array([f["kNNMaxDistance"] for f in times.values()])
   around_voxels           = np.array([f["AroundVoxels"] for f in times.values()])
   covariance_eigenvalue   = np.array([f["CovarianceEigenvalue"] for f in times.values()])
   total                   = np.array([f["total"] for f in times.values()])
@@ -747,6 +793,7 @@ def plot_feature_time_consumption():
   plt.scatter(num_points, upper_voxels, label="UpperVoxels", alpha=0.8)
   plt.scatter(num_points, lower_voxels, label="LowerVoxels", alpha=0.8)
   plt.scatter(num_points, kNN_centroid_distance, label="kNNCentroidDistance", alpha=0.8)
+  plt.scatter(num_points, kNN_max_distance, label="kNNMaxDistance", alpha=0.8)
   plt.scatter(num_points, around_voxels, label="AroundVoxels", alpha=0.8)
   plt.scatter(num_points, covariance_eigenvalue, label="CovarianceEigenvalue", alpha=0.8)
   
@@ -828,6 +875,51 @@ def calculate_feature_performance():
       return iou_max
 
 
+
+  def calculate_prec(predictions, targets):
+    return precision_score(targets, predictions)
+  
+  def optimize_prec(values, targets, f_min, f_max, rec_left):
+    zero_targets = sum([1 if x == 0 else 0 for x in targets])
+    minimum_cutoff = zero_targets*0.1
+
+
+    step = (f_max - f_min) / 10
+    prec_max = (0, 0)
+    targets_set = set(targets)
+    for threshold in [f_min + step*i for i in range(11)]: # range(f_min, f_max+step, step):
+      # Need to test >= and <
+      pred_under = np.where(values < threshold, 1, 0)
+      pred_over = np.where(values >= threshold, 1, 0)
+      if len(targets_set - set(pred_under)) > 0:
+        prec_under = 0
+      elif sum([1 if x == 1 else 0 for x in pred_under]) < minimum_cutoff:
+        prec_under = 0
+      else:
+        prec_under = calculate_prec(pred_under, targets)
+
+      if len(targets_set - set(pred_over)) > 0:
+        prec_over = 0
+      elif sum([1 if x == 1 else 0 for x in pred_over]) < minimum_cutoff:
+        prec_over = 0
+      else:
+        prec_over = calculate_prec(pred_over, targets)
+
+      if prec_under > prec_max[0]:
+        prec_max = (prec_under, threshold)
+      
+      if prec_over > prec_max[0]:
+        prec_max = (prec_over, threshold)
+
+    if rec_left > 0:
+      new_f_min = prec_max[1]-step
+      new_f_max = prec_max[1]+step
+      return optimize_prec(values, targets, new_f_min, new_f_max, rec_left - 1)
+    else:
+      return prec_max
+
+
+
   # one_targets = sum([1 if x == 1 else 0 for x in targets])
   # zero_targets = sum([1 if x == 0 else 0 for x in targets])
   # one_weight = zero_targets/(one_targets+zero_targets)
@@ -837,14 +929,29 @@ def calculate_feature_performance():
 
   # test_values = np.random.choice([0, 1], size=targets.shape[0]) #, p=[.154, .846])
   # test_targets = np.random.choice([0, 1], size=targets.shape[0]) #, p=[.154, .846])
-  # test_values = r.randint(0, 2, targets.shape[0])
-  # print('random test IoU:', calculate_iou(test_values, targets))
+  test_values = r.randint(0, 2, targets.shape[0])
+  print('random test Prec:', calculate_prec(test_values, targets))
 
-  # zero_values = np.zeros(targets.shape[0])
-  # print('all zeros IoU  :', calculate_iou(zero_values, targets))
+  zero_values = np.zeros(targets.shape[0])
+  print('all zeros Prec  :', calculate_prec(zero_values, targets))
 
-  # ones_values = np.ones(targets.shape[0])
-  # print('all ones IoU   :', calculate_iou(ones_values, targets))
+  ones_values = np.ones(targets.shape[0])
+  print('all ones Prec   :', calculate_prec(ones_values, targets))
+
+  metric_types = ["IoU", "Prec"]
+
+  def get_metric_index():
+    for file_i, file in enumerate(metric_types):
+      print("(" + str(file_i) + ")\t" + file)
+    chosen_index = int(input("> "))
+    while chosen_index < 0 or chosen_index >= len(metric_types):
+      print("Must be between 0 and " + str(len(metric_types) - 1))
+      chosen_index = int(input("> "))
+    return chosen_index
+
+
+  print("Which metric do you want to test?:")
+  metric_index = get_metric_index()
 
   feature_performance = {}
   for feature_name in tqdm(feature_list):
@@ -856,19 +963,27 @@ def calculate_feature_performance():
     f_min += interval_range * 0.05
     f_max -= interval_range * 0.05
 
-    iou, threshold = optimize_iou(feature_values, targets, f_min, f_max, 3)
-    feature_performance[feature_name] = iou
+    if metric_index == 0:
+      iou, threshold = optimize_iou(feature_values, targets, f_min, f_max, 3)
+      feature_performance[feature_name] = iou
+    elif metric_index == 1:
+      prec, threshold = optimize_prec(feature_values, targets, f_min, f_max, 3)
+      feature_performance[feature_name] = prec
+
   
   feature_groups = ["LowerVoxels", "UpperVoxels", "AroundVoxels", "EdgeVoxels", 
-                    "10_knn_mean_dist", "10_knn_max_dist", "z_pow2", "kNNCentroidDistance",
+                    "kNNMaxDistance", "z_pow2", "kNNCentroidDistance",
                     "CovarianceEigenvalue_feature_0", "CovarianceEigenvalue_feature_1_", "CovarianceEigenvalue_feature_2", 
                     "CovarianceEigenvalue_feature_3", "CovarianceEigenvalue_feature_4", "CovarianceEigenvalue_feature_5", 
                     "CovarianceEigenvalue_feature_6", "CovarianceEigenvalue_feature_7", "CovarianceEigenvalue_feature_8", 
                     "CovarianceEigenvalue_feature_9", "CovarianceEigenvalue_feature_10"]
 
   feature_group_to_name = {
-    "kNNCentroidDistance": "kNN C D", "LowerVoxels": "LowerVoxels", "UpperVoxels": "UpperVoxels", 
-    "AroundVoxels": "AroundVoxels", "EdgeVoxels": "EdgeVoxels", 
+    "kNNCentroidDistance": "kNN C D",
+    "kNNMaxDistance": "kNN max dist.",
+    "z_pow2": "z\\textsuperscript{2}",
+    "LowerVoxels": "LowerVoxels", "UpperVoxels": "UpperVoxels", 
+    "AroundVoxels": "AroundVoxels", "EdgeVoxels": "EdgeVoxels",
     "CovarianceEigenvalue_feature_0": "Eigenvalue $\lambda_0$", 
     "CovarianceEigenvalue_feature_1_": "Eigenvalue $\lambda_1$", 
     "CovarianceEigenvalue_feature_2": "Eigenvalue $\lambda_2$", 
@@ -933,13 +1048,7 @@ def display_data_metrics():
   print(f'\tEdge points     : {zero_evaluation}')
   print(f'\tNon-edge points : {one_evaluation}')
   print(f'\tRatio           : {zero_evaluation/one_evaluation}')
-  
 
-  
-    
-
-  
-  
 
 def main():
   main_menu_choice = get_main_menu_choice()
